@@ -826,6 +826,26 @@ def test_add_component_ids(two_components):
     assert all(labelled.edges.component_id == pd.Series([2, 1, 1]))
 
 
+def test_merge_zero_networks():
+    merged = snkit.network.merge_networks([])
+    assert merged.nodes.empty
+    assert merged.edges.empty
+
+
+def test_merge_one_network(split):
+    merged = snkit.network.merge_networks([split])
+    assert_frame_equal(merged.nodes, split.nodes)
+    assert_frame_equal(merged.edges, split.edges)
+
+
+def test_merge_networks(split):
+    split_abc = snkit.Network(split.nodes[:3], split.edges[:2])
+    split_cd = snkit.Network(split.nodes[2:], split.edges[2:])
+    merged = snkit.network.merge_networks([split_abc, split_cd])
+    assert_frame_equal(merged.nodes, split.nodes)
+    assert_frame_equal(merged.edges, split.edges)
+
+
 def test_matching_gdf_from_geoms(edge_only):
     expected = edge_only.edges.copy()
     gdf = edge_only.edges.copy()

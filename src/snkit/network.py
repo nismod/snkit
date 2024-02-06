@@ -1120,3 +1120,31 @@ def add_component_ids(network: Network, id_col: str = "component_id") -> Network
         network.nodes.loc[node_mask, id_col] = count + 1
 
     return network
+
+
+def merge_networks(networks: List[Network]) -> Network:
+    """Merge multiple networks, identifying duplicate nodes at shared locations"""
+
+    n = len(networks)
+    if n == 0:
+        warnings.warn("Merging zero networks to return empty network.")
+        return Network()
+    if n == 1:
+        return networks[0]
+
+    # TODO update components
+    # - find duplicated nodes by location
+    # - for each duplicated node, record (network_idx, component_id)
+    # - set up nx.Graph
+    #   - a vertex for each duplicated node
+    #   - edges connecting duplicate node sets
+    #   - edges connecting (network_idx, component_id) sets
+    #   - find connected components in this graph
+    # - set up Dict[Tuple[network_idx, component_id], global_component_id]
+
+    # TODO do we default to concat_dedup? or default low-intervention?
+    # TODO how to handle expectations of unique node or edge ids? (especially if edges have topology)
+    nodes = concat_dedup([network.nodes for network in networks])
+    edges = concat_dedup([network.edges for network in networks])
+
+    return Network(nodes, edges)
