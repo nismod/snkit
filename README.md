@@ -120,10 +120,11 @@ A. Contented Customer (@czor847)
 ## Related projects
 
 - [`pysal/spaghetti`](https://pysal-spaghetti.readthedocs.io/en/latest/index.html) has methods
-  for building graph-theoretic networks and the analysis of network events.
+  for building graph-theoretic networks and the analysis of network events; JOSS paper [10.21105/joss.02826](https://doi.org/10.21105/joss.02826) cites `snkit`
 - [`osmnx`](https://osmnx.readthedocs.io/en/stable/) lets you retrieve, model, analyze, and
   visualize street networks from OpenStreetMap, including methods to correct and simplify
   network topology.
+- [`neatnet`](https://github.com/uscuni/neatnet) focuses on simplification of street networks; CEUS paper [10.1016/j.compenvurbsys.2025.102354](https://doi.org/10.1016/j.compenvurbsys.2025.102354) cites `snkit`
 
 ## Acknowledgements
 
