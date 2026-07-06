@@ -26,6 +26,7 @@ dependencies = ["geopandas>=1.0", "numpy", "pandas", "shapely>=2.0"]
 dev = ["mypy", "nbstripout", "pre-commit", "pytest", "pytest-cov", "ruff"]
 docs = ["myst-parser", "sphinx"]
 networkx = ["networkx>=3.0"]
+igraph = ["python-igraph>=1.0"]
 
 [project.urls]
 Homepage = "https://snkit.readthedocs.io/en/latest/"
