@@ -4,7 +4,6 @@ networkx>=3.0
 shapely>=2.0
 
 # test/lint
-black
 mypy
 nbstripout
 pandas-stubs

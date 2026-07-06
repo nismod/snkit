@@ -1,5 +1,5 @@
-"""Test core objects/concepts
-"""
+"""Test core objects/concepts"""
+
 from geopandas import GeoDataFrame
 
 import pandas as pd
@@ -526,18 +526,14 @@ def test_split_at_intersection_endnode(unsplit, split):
     assert_frame_equal(split.nodes, actual.nodes)
 
 
-def test_split_at_intersection_multiple(
-    unsplit_multiple_intersections, split_multiple_intersections
-):
+def test_split_at_intersection_multiple(unsplit_multiple_intersections, split_multiple_intersections):
     """Should split the edges at each intersection"""
     actual = snkit.network.split_edges_at_intersections(unsplit_multiple_intersections)
     assert_frame_equal(split_multiple_intersections.edges, actual.edges)
     assert_frame_equal(split_multiple_intersections.nodes, actual.nodes)
 
 
-def test_split_intersection_overlapping_edges(
-    unsplit_overlapping_lines, split_overlapping_lines
-):
+def test_split_intersection_overlapping_edges(unsplit_overlapping_lines, split_overlapping_lines):
     """Should split at the start and end of the intersecting sector
 
     The intersecting sector should be duplicated.
@@ -547,13 +543,9 @@ def test_split_intersection_overlapping_edges(
     assert_frame_equal(split_overlapping_lines.nodes, actual.nodes)
 
 
-def test_split_intersection_heterogeneous(
-    unsplit_heterogeneous_intersection, split_heterogeneous_intersection
-):
+def test_split_intersection_heterogeneous(unsplit_heterogeneous_intersection, split_heterogeneous_intersection):
     """Should split at intersection points and sectors (endpoints)"""
-    actual = snkit.network.split_edges_at_intersections(
-        unsplit_heterogeneous_intersection
-    )
+    actual = snkit.network.split_edges_at_intersections(unsplit_heterogeneous_intersection)
     assert_frame_equal(split_heterogeneous_intersection.edges, actual.edges)
     assert_frame_equal(split_heterogeneous_intersection.nodes, actual.nodes)
 
@@ -727,9 +719,7 @@ def test_split_multilinestrings_merge():
     assert list(split_network.edges.index.values) == list(range(4))
 
     # Check again, with merge_parts
-    split_network_merged = snkit.network.split_multilinestrings(
-        multi_network, merge_parts=True
-    )
+    split_network_merged = snkit.network.split_multilinestrings(multi_network, merge_parts=True)
     assert len(split_network_merged.edges) == 3
 
     # check data is replicated from multilinestring to child linestrings
@@ -796,9 +786,7 @@ def test_passing_slice():
     with_ids = snkit.network.add_ids(with_endpoints)
 
     actual = with_ids.edges
-    expected = GeoDataFrame(
-        [(cb, "edge_0"), (cd, "edge_1")], columns=["geometry", "id"]
-    )
+    expected = GeoDataFrame([(cb, "edge_0"), (cd, "edge_1")], columns=["geometry", "id"])
 
     print(actual)
     assert_frame_equal(actual, expected)
