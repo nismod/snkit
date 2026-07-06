@@ -1,5 +1,7 @@
 """Network representation and utilities
 """
+from __future__ import annotations
+
 from functools import partial
 import logging
 import multiprocessing
