@@ -846,6 +846,59 @@ def test_merge_networks(split):
     assert_frame_equal(merged.edges, split.edges)
 
 
+def test_merge_networks_remaps_topology_and_renames_conflicting_ids():
+    a = Point((0, 0))
+    b = Point((0, 2))
+    c = Point((0, 1))
+
+    left_nodes = GeoDataFrame(data={"id": ["node_0", "node_1"]}, geometry=[a, c])
+    left_edges = GeoDataFrame(
+        data={"id": ["edge_0"], "from_id": ["node_0"], "to_id": ["node_1"]},
+        geometry=[LineString([a, c])],
+    )
+
+    right_nodes = GeoDataFrame(data={"id": ["node_0", "node_1"]}, geometry=[c, b])
+    right_edges = GeoDataFrame(
+        data={"id": ["edge_1"], "from_id": ["node_0"], "to_id": ["node_1"]},
+        geometry=[LineString([c, b])],
+    )
+
+    merged = snkit.network.merge_networks(
+        [snkit.Network(left_nodes, left_edges), snkit.Network(right_nodes, right_edges)]
+    )
+
+    assert list(merged.nodes.geometry) == [a, c, b]
+    assert list(merged.nodes.id) == ["node_0", "node_1", "node_1_1"]
+    assert list(merged.edges.from_id) == ["node_0", "node_1"]
+    assert list(merged.edges.to_id) == ["node_1", "node_1_1"]
+
+
+def test_merge_networks_preserves_component_ids():
+    a = Point((0, 0))
+    b = Point((0, 2))
+    c = Point((0, 1))
+
+    left_nodes = GeoDataFrame(
+        data={"component_id": [10, 10]}, geometry=[a, c]
+    )
+    left_edges = GeoDataFrame(
+        data={"component_id": [10]}, geometry=[LineString([a, c])]
+    )
+    right_nodes = GeoDataFrame(
+        data={"component_id": [20, 20]}, geometry=[c, b]
+    )
+    right_edges = GeoDataFrame(
+        data={"component_id": [20]}, geometry=[LineString([c, b])]
+    )
+
+    merged = snkit.network.merge_networks(
+        [snkit.Network(left_nodes, left_edges), snkit.Network(right_nodes, right_edges)]
+    )
+
+    assert list(merged.edges.component_id) == [10, 20]
+    assert list(merged.nodes.component_id) == [10, 10, 20]
+
+
 def test_matching_gdf_from_geoms(edge_only):
     expected = edge_only.edges.copy()
     gdf = edge_only.edges.copy()

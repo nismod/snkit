@@ -6,7 +6,7 @@ from functools import partial
 import logging
 import multiprocessing
 import os
-from typing import Any, Callable, List, Optional, Set, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 import warnings
 
 import geopandas
@@ -1123,7 +1123,13 @@ def add_component_ids(network: Network, id_col: str = "component_id") -> Network
 
 
 def merge_networks(networks: List[Network]) -> Network:
-    """Merge multiple networks, identifying duplicate nodes at shared locations"""
+    """Merge multiple networks, identifying duplicate nodes at shared locations.
+
+    Shared nodes are matched by exact geometry. Existing node and edge ids are
+    preserved where possible, but ids that would otherwise collide for distinct
+    geometries are renamed. If topology columns are present, edge endpoints are
+    remapped to the merged node ids.
+    """
 
     n = len(networks)
     if n == 0:
@@ -1132,19 +1138,92 @@ def merge_networks(networks: List[Network]) -> Network:
     if n == 1:
         return networks[0]
 
-    # TODO update components
-    # - find duplicated nodes by location
-    # - for each duplicated node, record (network_idx, component_id)
-    # - set up nx.Graph
-    #   - a vertex for each duplicated node
-    #   - edges connecting duplicate node sets
-    #   - edges connecting (network_idx, component_id) sets
-    #   - find connected components in this graph
-    # - set up Dict[Tuple[network_idx, component_id], global_component_id]
+    node_records: List[Tuple[int, bytes, "pandas.Series[Any]", Optional[str], Any]] = []
+    edge_frames: List[Tuple[int, GeoDataFrame]] = []
 
-    # TODO do we default to concat_dedup? or default low-intervention?
-    # TODO how to handle expectations of unique node or edge ids? (especially if edges have topology)
-    nodes = concat_dedup([network.nodes for network in networks])
-    edges = concat_dedup([network.edges for network in networks])
+    used_node_ids: Set[Any] = set()
+    node_id_map: Dict[Tuple[int, Any], Any] = {}
+
+    def make_unique_node_id(node_id: Any) -> Any:
+        if node_id not in used_node_ids:
+            return node_id
+
+        suffix = 1
+        candidate = f"{node_id}_{suffix}"
+        while candidate in used_node_ids:
+            suffix += 1
+            candidate = f"{node_id}_{suffix}"
+        return candidate
+
+    any_node_has_id = False
+
+    for network_idx, network in enumerate(networks):
+        nodes = network.nodes.copy()
+        geom_col = geometry_column_name(nodes)
+        has_id_col = "id" in nodes.columns
+        any_node_has_id = any_node_has_id or has_id_col
+
+        if not nodes.empty:
+            for row in nodes.itertuples(index=False):
+                row_series = pandas.Series(row._asdict())
+                geom = row_series[geom_col]
+                geom_key = geom.wkb
+                original_id = row_series["id"] if has_id_col else None
+                node_records.append((network_idx, geom_key, row_series, geom_col, original_id))
+        edges = network.edges.copy()
+        edge_frames.append((network_idx, edges))
+
+    geom_groups: Dict[bytes, List[Tuple[int, "pandas.Series[Any]", Optional[str]]]] = {}
+    geom_order: List[bytes] = []
+    geom_cols: Dict[bytes, str] = {}
+    for network_idx, geom_key, row, geom_col, original_id in node_records:
+        if geom_key not in geom_groups:
+            geom_groups[geom_key] = []
+            geom_order.append(geom_key)
+            geom_cols[geom_key] = geom_col
+        geom_groups[geom_key].append((network_idx, row, original_id))
+
+    canonical_ids: Dict[bytes, Any] = {}
+    for geom_key in geom_order:
+        original_ids = [original_id for _, _, original_id in geom_groups[geom_key]]
+        assigned_id = next(
+            (
+                original_id
+                for original_id in original_ids
+                if original_id is not None and not pandas.isna(original_id)
+            ),
+            None,
+        )
+        if assigned_id is not None:
+            assigned_id = make_unique_node_id(assigned_id)
+            used_node_ids.add(assigned_id)
+        canonical_ids[geom_key] = assigned_id
+        for network_idx, _, original_id in geom_groups[geom_key]:
+            if original_id is not None and not pandas.isna(original_id):
+                node_id_map[(network_idx, original_id)] = assigned_id
+
+    node_dicts = []
+    for geom_key in geom_order:
+        row = geom_groups[geom_key][0][1].copy()
+        if any_node_has_id:
+            row["id"] = canonical_ids[geom_key]
+        node_dicts.append(row.to_dict())
+
+    if node_dicts:
+        nodes = GeoDataFrame(node_dicts, geometry=geom_cols[geom_order[0]])
+    else:
+        nodes = GeoDataFrame(geometry=[])
+    remapped_edge_frames: List[GeoDataFrame] = []
+    for network_idx, edges in edge_frames:
+        if not edges.empty and {"from_id", "to_id"}.issubset(edges.columns):
+            edges = edges.copy()
+            edges["from_id"] = edges["from_id"].apply(
+                lambda value, idx=network_idx: node_id_map.get((idx, value), value)
+            )
+            edges["to_id"] = edges["to_id"].apply(
+                lambda value, idx=network_idx: node_id_map.get((idx, value), value)
+            )
+        remapped_edge_frames.append(edges)
+    edges = concat_dedup(remapped_edge_frames)
 
     return Network(nodes, edges)
