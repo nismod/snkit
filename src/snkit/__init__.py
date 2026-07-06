@@ -1,5 +1,5 @@
-"""snkit - a spatial networks toolkit
-"""
+"""snkit - a spatial networks toolkit"""
+
 from importlib.metadata import version, PackageNotFoundError
 
 # Define what is accessible directly on snkit, when a client writes::

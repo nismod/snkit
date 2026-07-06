@@ -23,6 +23,13 @@ try:
 except ImportError:
     USE_NX = False
 
+try:
+    import igraph
+
+    USE_IGRAPH = True
+except ImportError:
+    USE_IGRAPH = False
+
 from geopandas import GeoDataFrame
 from shapely import Geometry
 from shapely.geometry import (
@@ -60,7 +67,9 @@ if "SNKIT_PROCESSES" in os.environ:
         cpus = 1
     PARALLEL_PROCESS_COUNT: int = min([cpus, requested_processes])
 
-    logging.info(f"SNKIT_PROCESSES={processes_env_var}, using {PARALLEL_PROCESS_COUNT} processes")
+    logging.info(
+        f"SNKIT_PROCESSES={processes_env_var}, using {PARALLEL_PROCESS_COUNT} processes"
+    )
 else:
     PARALLEL_PROCESS_COUNT = 0
 
@@ -82,7 +91,9 @@ class Network:
 
     """
 
-    def __init__(self, nodes: Optional[GeoDataFrame] = None, edges: Optional[GeoDataFrame] = None):
+    def __init__(
+        self, nodes: Optional[GeoDataFrame] = None, edges: Optional[GeoDataFrame] = None
+    ):
         """ """
         if nodes is None:
             nodes = GeoDataFrame(geometry=[])
@@ -117,7 +128,9 @@ class Network:
         self.edges.set_crs(crs, epsg, inplace, allow_override)
         self.nodes.set_crs(crs, epsg, inplace, allow_override)
 
-    def to_crs(self, crs: Optional[pyproj.CRS] = None, epsg: Optional[int] = None) -> None:
+    def to_crs(
+        self, crs: Optional[pyproj.CRS] = None, epsg: Optional[int] = None
+    ) -> None:
         """Transform network nodes and edges geometries to a new coordinate
         reference system (CRS).
 
@@ -216,7 +229,9 @@ def add_topology(network: Network, id_col: str = "id") -> Network:
     from_ids = []
     to_ids = []
 
-    for edge in tqdm(network.edges.itertuples(), desc="topology", total=len(network.edges)):
+    for edge in tqdm(
+        network.edges.itertuples(), desc="topology", total=len(network.edges)
+    ):
         start, end = line_endpoints(edge.geometry)
 
         start_node = nearest_node(start, network.nodes)
@@ -235,7 +250,9 @@ def add_topology(network: Network, id_col: str = "id") -> Network:
 def get_endpoints(network: Network) -> GeoDataFrame:
     """Get nodes for each edge endpoint"""
     endpoints = []
-    for edge in tqdm(network.edges.itertuples(), desc="endpoints", total=len(network.edges)):
+    for edge in tqdm(
+        network.edges.itertuples(), desc="endpoints", total=len(network.edges)
+    ):
         if edge.geometry is None:
             continue
         if edge.geometry.geom_type == "MultiLineString":
@@ -291,7 +308,9 @@ def split_multilinestrings(network: Network, merge_parts: bool = False) -> Netwo
 
     geo_types = set(split_edges.geom_type)
     if geo_types != {"LineString"}:
-        raise ValueError(f"exploded edges are of type(s) {geo_types} but should only be LineString")
+        raise ValueError(
+            f"exploded edges are of type(s) {geo_types} but should only be LineString"
+        )
 
     return Network(nodes=network.nodes, edges=split_edges)
 
@@ -342,7 +361,9 @@ def snap_nodes(network: Network, threshold: Optional[Number] = None) -> Network:
     return Network(nodes=nodes, edges=network.edges)
 
 
-def _split_edges_at_nodes(edges: GeoDataFrame, nodes: GeoDataFrame, tolerance: float) -> List["pandas.Series[Any]"]:
+def _split_edges_at_nodes(
+    edges: GeoDataFrame, nodes: GeoDataFrame, tolerance: float
+) -> List["pandas.Series[Any]"]:
     """Split edges at nodes for a network chunk"""
     split_edges = []
 
@@ -357,7 +378,9 @@ def _split_edges_at_nodes(edges: GeoDataFrame, nodes: GeoDataFrame, tolerance: f
     return split_edges
 
 
-def split_edges_at_nodes(network: Network, tolerance: Number = 1e-9, chunk_size: Optional[int] = None) -> Network:
+def split_edges_at_nodes(
+    network: Network, tolerance: Number = 1e-9, chunk_size: Optional[int] = None
+) -> Network:
     """
     Split network edges where they intersect node geometries.
 
@@ -379,7 +402,10 @@ def split_edges_at_nodes(network: Network, tolerance: Number = 1e-9, chunk_size:
     if PARALLEL_PROCESS_COUNT > 1:
         if chunk_size is None:
             chunk_size = max([1, int(n / PARALLEL_PROCESS_COUNT)])
-        args = [(network.edges.iloc[i : i + chunk_size, :], network.nodes, tolerance) for i in range(0, n, chunk_size)]
+        args = [
+            (network.edges.iloc[i : i + chunk_size, :], network.nodes, tolerance)
+            for i in range(0, n, chunk_size)
+        ]
         with multiprocessing.Pool(PARALLEL_PROCESS_COUNT) as pool:
             results = pool.starmap(_split_edges_at_nodes, args)
 
@@ -390,16 +416,25 @@ def split_edges_at_nodes(network: Network, tolerance: Number = 1e-9, chunk_size:
         split_edges = _split_edges_at_nodes(network.edges, network.nodes, tolerance)
 
     # combine dfs
-    edges = pandas.concat(split_edges, axis=0).reset_index().drop("index", axis=1)
+    edges = (
+        pandas.concat(split_edges, axis=0)
+        .reset_index()
+        .drop("index", axis=1)
+        .set_crs(network.edges.crs, allow_override=True)
+    )
 
     return Network(nodes=network.nodes, edges=edges)
 
 
-def split_edges_at_intersections(network: Network, tolerance: Optional[Number] = 1e-9) -> Network:
+def split_edges_at_intersections(
+    network: Network, tolerance: Optional[Number] = 1e-9
+) -> Network:
     """Split network edges where they intersect line geometries"""
     split_edges = []
     split_points = []
-    for edge in tqdm(network.edges.itertuples(index=False), desc="split", total=len(network.edges)):
+    for edge in tqdm(
+        network.edges.itertuples(index=False), desc="split", total=len(network.edges)
+    ):
         # note: the symmetry of intersection is not exploited here.
         # (If A intersects B, then B intersects A)
         # since edges are not modified within the loop, this has just
@@ -442,7 +477,9 @@ def link_nodes_to_edges_within(
     """Link nodes to all edges within some distance"""
     new_node_geoms = []
     new_edge_geoms = []
-    for node in tqdm(network.nodes.itertuples(index=False), desc="link", total=len(network.nodes)):
+    for node in tqdm(
+        network.nodes.itertuples(index=False), desc="link", total=len(network.nodes)
+    ):
         # for each node, find edges within
         edges = edges_within(node.geometry, network.edges, distance)
         for edge in edges.itertuples():
@@ -474,7 +511,9 @@ def link_nodes_to_nearest_edge(
     """Link nodes to all edges within some distance"""
     new_node_geoms = []
     new_edge_geoms = []
-    for node in tqdm(network.nodes.itertuples(index=False), desc="link", total=len(network.nodes)):
+    for node in tqdm(
+        network.nodes.itertuples(index=False), desc="link", total=len(network.nodes)
+    ):
         # for each node, find edges within
         edge = nearest_edge(node.geometry, network.edges)
         if condition is not None and not condition(node, edge):
@@ -502,7 +541,9 @@ def link_nodes_to_nearest_edge(
     return split
 
 
-def merge_edges(network: Network, id_col: Optional[str] = "id", by: Optional[List[str]] = None) -> Network:
+def merge_edges(
+    network: Network, id_col: Optional[str] = "id", by: Optional[List[str]] = None
+) -> Network:
     """Merge edges that share a node with a connectivity degree of 2
 
     Parameters
@@ -514,7 +555,9 @@ def merge_edges(network: Network, id_col: Optional[str] = "id", by: Optional[Lis
       edges have different values.
     """
     if "degree" not in network.nodes.columns:
-        network.nodes["degree"] = network.nodes[id_col].apply(lambda x: node_connectivity_degree(x, network))
+        network.nodes["degree"] = network.nodes[id_col].apply(
+            lambda x: node_connectivity_degree(x, network)
+        )
 
     degree2 = list(network.nodes[id_col].loc[network.nodes.degree == 2])
     d2_set = set(degree2)
@@ -531,7 +574,10 @@ def merge_edges(network: Network, id_col: Optional[str] = "id", by: Optional[Lis
             matches = set(
                 np.unique(
                     network.edges[["from_id", "to_id"]]
-                    .loc[(network.edges.from_id == popped_cand) | (network.edges.to_id == popped_cand)]
+                    .loc[
+                        (network.edges.from_id == popped_cand)
+                        | (network.edges.to_id == popped_cand)
+                    ]
                     .values
                 )
             )
@@ -546,7 +592,10 @@ def merge_edges(network: Network, id_col: Optional[str] = "id", by: Optional[Lis
                     node_path.add(match)
         if len(node_path) > 2:
             edge_paths.append(
-                network.edges.loc[(network.edges.from_id.isin(node_path)) & (network.edges.to_id.isin(node_path))]
+                network.edges.loc[
+                    (network.edges.from_id.isin(node_path))
+                    & (network.edges.to_id.isin(node_path))
+                ]
             )
 
     concat_edge_paths = []
@@ -586,7 +635,9 @@ def merge_edges(network: Network, id_col: Optional[str] = "id", by: Optional[Lis
     edges_new = network.edges.copy()
     edges_new = edges_new.loc[~(edges_new.id.isin(list(unique_edge_ids)))]
     edges_new.geometry = edges_new.geometry.apply(merge_multilinestring)
-    edges = pandas.concat([edges_new, pandas.concat(concat_edge_paths).reset_index()], sort=False)
+    edges = pandas.concat(
+        [edges_new, pandas.concat(concat_edge_paths).reset_index()], sort=False
+    )
 
     nodes = network.nodes.set_index(id_col).loc[list(new_node_ids)].copy().reset_index()
 
@@ -632,10 +683,14 @@ def concat_dedup(dfs: List[pandas.DataFrame]) -> GeoDataFrame:
 
 
 def node_connectivity_degree(node: str, network: Network) -> int:
-    return len(network.edges[(network.edges.from_id == node) | (network.edges.to_id == node)])
+    return len(
+        network.edges[(network.edges.from_id == node) | (network.edges.to_id == node)]
+    )
 
 
-def drop_duplicate_geometries(gdf: GeoDataFrame, keep: Optional[str] = "first") -> GeoDataFrame:
+def drop_duplicate_geometries(
+    gdf: GeoDataFrame, keep: Optional[str] = "first"
+) -> GeoDataFrame:
     """Drop duplicate geometries from a dataframe"""
     # as of geopandas ~0.6 this should work without explicit conversion to wkb
     # discussed in https://github.com/geopandas/geopandas/issues/521
@@ -704,7 +759,9 @@ def edges_intersecting_points(
             segments_coordinates = []
             for seg in intersection.geoms:
                 segments_coordinates.extend(list(seg.coords))
-            intersection = [Point(p) for p, c in Counter(segments_coordinates).items() if c > 1]
+            intersection = [
+                Point(p) for p, c in Counter(segments_coordinates).items() if c > 1
+            ]
             intersection = MultiPoint(intersection)
 
         # then extract the intersection points
@@ -713,17 +770,23 @@ def edges_intersecting_points(
     return hits_points
 
 
-def edges_intersecting(line: LineString, edges: GeoDataFrame, tolerance: Optional[Number] = 1e-9) -> GeoDataFrame:
+def edges_intersecting(
+    line: LineString, edges: GeoDataFrame, tolerance: Optional[Number] = 1e-9
+) -> GeoDataFrame:
     """Find edges intersecting line"""
     return intersects(line, edges, tolerance)
 
 
-def nodes_intersecting(line: LineString, nodes: GeoDataFrame, tolerance: Optional[Number] = 1e-9) -> GeoDataFrame:
+def nodes_intersecting(
+    line: LineString, nodes: GeoDataFrame, tolerance: Optional[Number] = 1e-9
+) -> GeoDataFrame:
     """Find nodes intersecting line"""
     return intersects(line, nodes, tolerance)
 
 
-def intersects(geom: Geometry, gdf: GeoDataFrame, tolerance: Optional[Number] = 1e-9) -> GeoDataFrame:
+def intersects(
+    geom: Geometry, gdf: GeoDataFrame, tolerance: Optional[Number] = 1e-9
+) -> GeoDataFrame:
     """Find the subset of a GeoDataFrame intersecting with a shapely geometry"""
     return _intersects(geom, gdf, tolerance)
 
@@ -733,7 +796,9 @@ def d_within(geom: Geometry, gdf: GeoDataFrame, distance: Number) -> GeoDataFram
     return _intersects(geom, gdf, distance)
 
 
-def _intersects(geom: Geometry, gdf: GeoDataFrame, tolerance: Optional[Number] = 1e-9) -> GeoDataFrame:
+def _intersects(
+    geom: Geometry, gdf: GeoDataFrame, tolerance: Optional[Number] = 1e-9
+) -> GeoDataFrame:
     if geom.is_empty:
         return geopandas.GeoDataFrame()
     buf = geom.buffer(tolerance)
@@ -766,7 +831,9 @@ def line_endpoints(line: LineString) -> Tuple[Point, Point]:
     return start, end
 
 
-def intersection_endpoints(geom: Geometry, output: Optional[List[Point]] = None) -> List[Point]:
+def intersection_endpoints(
+    geom: Geometry, output: Optional[List[Point]] = None
+) -> List[Point]:
     """Return the points from an intersection geometry
 
     It extracts the starting and ending points of intersection
@@ -788,7 +855,11 @@ def intersection_endpoints(geom: Geometry, output: Optional[List[Point]] = None)
         output.append(end)
     # recursively for collections of geometries
     # note that there is no shared inheritance relationship
-    elif geom_type == "MultiPoint" or geom_type == "MultiLineString" or geom_type == "GeometryCollection":
+    elif (
+        geom_type == "MultiPoint"
+        or geom_type == "MultiLineString"
+        or geom_type == "GeometryCollection"
+    ):
         for geom_ in geom.geoms:
             output = intersection_endpoints(geom_, output)
 
@@ -885,7 +956,10 @@ def nearest_vertex_idx_on_line(point: Point, line: LineString) -> int:
     # splitting point)
     line_coords = np.array(line.coords)
     nearest_idx, _ = min(
-        [(idx, point.distance(Point(coords))) for idx, coords in enumerate(line_coords)],
+        [
+            (idx, point.distance(Point(coords)))
+            for idx, coords in enumerate(line_coords)
+        ],
         key=lambda item: item[1],
     )
     return nearest_idx
@@ -899,7 +973,9 @@ def nearest_point_on_line(point: Point, line: LineString) -> Point:
 def set_precision(geom: Geometry, precision: int) -> Geometry:
     """Set geometry precision"""
     geom_mapping = mapping(geom)
-    geom_mapping["coordinates"] = np.round(np.array(geom_mapping["coordinates"]), precision)
+    geom_mapping["coordinates"] = np.round(
+        np.array(geom_mapping["coordinates"]), precision
+    )
     return shape(geom_mapping)
 
 
@@ -919,7 +995,9 @@ def to_networkx(
         G.add_nodes_from(network.nodes.id.to_list())
 
         # add nodal positions from geom
-        for node_id, x, y in zip(network.nodes.id, network.nodes.geometry.x, network.nodes.geometry.y):
+        for node_id, x, y in zip(
+            network.nodes.id, network.nodes.geometry.x, network.nodes.geometry.y
+        ):
             G.nodes[node_id]["pos"] = (x, y)
 
         # get edges from network data
@@ -943,6 +1021,73 @@ def to_networkx(
         # add edges to graph
         G.add_weighted_edges_from(edges_as_list)
         return G
+
+
+def to_igraph(
+    network: Network, directed: bool = False, weight_col: Optional[str] = None
+) -> "igraph.Graph":
+    """Return an igraph Graph representation of the network
+
+    Parameters
+    ----------
+    network : snkit.network.Network
+        The network to convert
+    directed : bool, optional
+        If True, create a directed graph. Default is False (undirected)
+    weight_col : str, optional
+        Column name to use for edge weights. If None, uses geometry length.
+
+    Returns
+    -------
+    igraph.Graph
+        An igraph Graph object with nodes and edges from the network
+
+    Raises
+    ------
+    ImportError
+        If igraph is not installed
+    """
+    if not USE_IGRAPH:
+        raise ImportError("No module named igraph")
+
+    # Create graph (directed or undirected)
+    g = igraph.Graph(directed=directed)
+
+    # Add vertices with their node IDs
+    node_ids = network.nodes.id.to_list()
+    g.add_vertices(len(node_ids))
+
+    # Set vertex names and positions
+    g.vs["name"] = node_ids
+    g.vs["x"] = network.nodes.geometry.x.to_list()
+    g.vs["y"] = network.nodes.geometry.y.to_list()
+
+    # Create mapping from node ID to vertex index for edge creation
+    node_id_to_idx = {node_id: idx for idx, node_id in enumerate(node_ids)}
+
+    # Prepare edges with weights
+    edge_list = []
+    weights = []
+
+    for edge in network.edges.itertuples(index=False):
+        from_idx = node_id_to_idx[edge.from_id]
+        to_idx = node_id_to_idx[edge.to_id]
+        edge_list.append((from_idx, to_idx))
+
+        # Get weight from specified column or use geometry length
+        if weight_col is None:
+            weight = edge.geometry.length
+        else:
+            weight = getattr(edge, weight_col)
+        weights.append(weight)
+
+    # Add edges to graph
+    g.add_edges(edge_list)
+
+    # Set edge weights
+    g.es["weight"] = weights
+
+    return g
 
 
 def get_connected_components(network: Network) -> List[Set[Any]]:
