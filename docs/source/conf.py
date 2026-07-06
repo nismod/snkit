@@ -14,29 +14,11 @@
 #
 import os
 import sys
-from unittest.mock import MagicMock
 
 from sphinx.ext.apidoc import main as run_apidoc
 
 __location__ = os.path.abspath(os.path.join(os.path.dirname(__file__)))
 sys.path.insert(0, os.path.join(__location__, "..", "..", "src"))
-
-
-# mock modules which we can avoid installing for docs-building
-class Mock(MagicMock):
-    @classmethod
-    def __getattr__(cls, name):
-        return MagicMock()
-
-
-mock_modules = [
-    "geopandas",
-    "shapely",
-    "shapely.errors",
-    "shapely.geometry",
-    "shapely.ops",
-]
-sys.modules.update((mod_name, Mock()) for mod_name in mock_modules)
 
 
 # -- Project information
@@ -64,15 +46,7 @@ output_dir = os.path.join(__location__, "api")
 module_dir = os.path.join(__location__, "..", "..", "src", "snkit")
 templates_dir = os.path.join(__location__, "_templates")
 
-run_apidoc(
-    [
-        "--force",
-        "--module-first",
-        "--output-dir",
-        output_dir,
-        module_dir
-    ]
-)
+run_apidoc(["--force", "--module-first", "--output-dir", output_dir, module_dir])
 
 # -- General configuration
 

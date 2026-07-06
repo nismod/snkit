@@ -7,7 +7,6 @@ dependencies:
   - pip
   - geopandas
   - networkx
-  - black
   - mypy
   - ruff
   - nbstripout

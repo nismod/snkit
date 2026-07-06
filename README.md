@@ -99,13 +99,10 @@ Run the tests using [pytest](https://docs.pytest.org):
 
     python -m pytest
 
-Run formatting using [black](https://black.readthedocs.io/):
+Run formatting and linting using [ruff](https://docs.astral.sh/ruff/):
 
-    black .
-
-Run linting using [ruff](https://docs.astral.sh/ruff/):
-
-    ruff check .
+    ruff format
+    ruff check
 
 Run type-checking using [mypy](https://mypy.readthedocs.io/):
 
