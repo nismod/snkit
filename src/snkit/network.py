@@ -103,6 +103,10 @@ class Network:
             edges = GeoDataFrame(geometry=[])
         self.edges = edges
 
+    def copy(self) -> "Network":
+        """Return a Network with copies of the nodes and edges GeoDataFrames"""
+        return Network(self.nodes.copy(), self.edges.copy())
+
     def set_crs(
         self,
         crs: Optional[pyproj.CRS] = None,
@@ -671,13 +675,17 @@ def geoms_to_array(
     return geom_arr
 
 
-def concat_dedup(dfs: List[pandas.DataFrame]) -> GeoDataFrame:
+def concat_dedup(
+    dfs: List[pandas.DataFrame],
+    keep: Optional[str] = "first",
+    subset: Optional[list[str]] = None,
+) -> GeoDataFrame:
     """Concatenate a list of GeoDataFrames, dropping duplicate geometries
     - note: repeatedly drops indexes for deduplication to work
     """
     cat = pandas.concat(dfs, axis=0, sort=False)
     cat.reset_index(drop=True, inplace=True)
-    cat_dedup = drop_duplicate_geometries(cat)
+    cat_dedup = drop_duplicate_geometries(cat, keep=keep, subset=subset)
     cat_dedup.reset_index(drop=True, inplace=True)
     return cat_dedup
 
@@ -689,12 +697,14 @@ def node_connectivity_degree(node: str, network: Network) -> int:
 
 
 def drop_duplicate_geometries(
-    gdf: GeoDataFrame, keep: Optional[str] = "first"
+    gdf: GeoDataFrame, keep: Optional[str] = "first", subset: Optional[list[str]] = None
 ) -> GeoDataFrame:
     """Drop duplicate geometries from a dataframe"""
-    # as of geopandas ~0.6 this should work without explicit conversion to wkb
-    # discussed in https://github.com/geopandas/geopandas/issues/521
-    return gdf.drop_duplicates([gdf.geometry.name])
+    if subset is None:
+        subset = [gdf.geometry.name]
+    else:
+        subset = list(set(subset) + set([gdf.geometry.name]))
+    return gdf.drop_duplicates(subset=subset, keep=keep)
 
 
 def nearest_point_on_edges(point: Point, edges: GeoDataFrame) -> Point:
@@ -1122,13 +1132,24 @@ def add_component_ids(network: Network, id_col: str = "component_id") -> Network
     return network
 
 
-def merge_networks(networks: List[Network]) -> Network:
+def merge_networks(networks: List[Network], id_col: str = "id") -> Network:
     """Merge multiple networks, identifying duplicate nodes at shared locations.
 
-    Shared nodes are matched by exact geometry. Existing node and edge ids are
-    preserved where possible, but ids that would otherwise collide for distinct
-    geometries are renamed. If topology columns are present, edge endpoints are
+    Shared nodes are matched by exact geometry. Existing node ids are preserved
+    where possible, but ids that would otherwise collide for distinct geometries
+    are renamed. Edge ids are preserved where possible, but renamed if they
+    would otherwise collide. If topology columns are present, edge endpoints are
     remapped to the merged node ids.
+
+    Before merging, each input network's own id_col is checked for null or
+    duplicated values (warning if found), null ids are filled with an empty
+    string or 0 depending on the column's dtype, and ids are made unique within
+    that network.
+
+    Parameters
+    ----------
+    id_col : default "id"
+        Column name used to identify nodes and edges
     """
 
     n = len(networks)
@@ -1136,87 +1157,129 @@ def merge_networks(networks: List[Network]) -> Network:
         warnings.warn("Merging zero networks to return empty network.")
         return Network()
     if n == 1:
-        return networks[0]
-
-    node_records: List[Tuple[int, bytes, "pandas.Series[Any]", Optional[str], Any]] = []
-    edge_frames: List[Tuple[int, GeoDataFrame]] = []
+        return networks[0].copy()
 
     used_node_ids: Set[Any] = set()
-    node_id_map: Dict[Tuple[int, Any], Any] = {}
+    used_edge_ids: Set[Any] = set()
 
-    def make_unique_node_id(node_id: Any) -> Any:
-        if node_id not in used_node_ids:
-            return node_id
+    def make_unique_id(id_value: Any, used_ids: Set[Any]) -> Any:
+        if id_value not in used_ids:
+            return id_value
 
         suffix = 1
-        candidate = f"{node_id}_{suffix}"
-        while candidate in used_node_ids:
+        candidate = f"{id_value}_{suffix}"
+        while candidate in used_ids:
             suffix += 1
-            candidate = f"{node_id}_{suffix}"
+            candidate = f"{id_value}_{suffix}"
         return candidate
 
-    any_node_has_id = False
+    def prepare_ids(ids: "pandas.Series[Any]", label: str) -> "pandas.Series[Any]":
+        # warn about null/duplicate ids within a single network's frame,
+        null_mask = ids.isna()
+        if null_mask.any():
+            warnings.warn(
+                f"{label}: found {int(null_mask.sum())} null {id_col}(s) before merging."
+            )
+        duplicated_mask = ids.duplicated(keep=False) & ~null_mask
+        if duplicated_mask.any():
+            dup_values = sorted({str(value) for value in ids[duplicated_mask]})
+            warnings.warn(
+                f"{label}: found duplicated {id_col}s before merging: {dup_values}"
+            )
 
+        # fill nulls with a dtype-appropriate placeholder
+        fill_value = 0 if pandas.api.types.is_numeric_dtype(ids) else ""
+        filled = ids.fillna(fill_value)
+
+        # make ids unique within that frame
+        seen: Set[Any] = set()
+        unique_values = []
+        for value in filled:
+            unique_value = make_unique_id(value, seen)
+            seen.add(unique_value)
+            unique_values.append(unique_value)
+        return pandas.Series(unique_values, index=ids.index)
+
+    # Normalise to a single geometry column name across all networks first:
+    # concatenating frames whose active geometry columns have different
+    # names would otherwise leave each network's geometry in a different
+    # column, so groupby/drop_duplicates would treat those rows as having
+    # no geometry at all rather than matching them correctly.
+    node_geom_col = geometry_column_name(networks[0].nodes)
+    any_node_has_id = any(id_col in network.nodes.columns for network in networks)
+
+    labeled_node_frames = []
     for network_idx, network in enumerate(networks):
         nodes = network.nodes.copy()
-        geom_col = geometry_column_name(nodes)
-        has_id_col = "id" in nodes.columns
-        any_node_has_id = any_node_has_id or has_id_col
+        if geometry_column_name(nodes) != node_geom_col:
+            nodes = nodes.rename_geometry(node_geom_col)
+        if any_node_has_id:
+            if id_col not in nodes.columns:
+                nodes[id_col] = None
+            if not nodes.empty:
+                nodes[id_col] = prepare_ids(
+                    nodes[id_col], f"merge_networks: nodes in network {network_idx}"
+                )
+        nodes["_source_network"] = network_idx
+        nodes["_source_id"] = nodes[id_col] if any_node_has_id else None
+        labeled_node_frames.append(nodes)
 
-        if not nodes.empty:
-            for row in nodes.itertuples(index=False):
-                row_series = pandas.Series(row._asdict())
-                geom = row_series[geom_col]
-                geom_key = geom.wkb
-                original_id = row_series["id"] if has_id_col else None
-                node_records.append((network_idx, geom_key, row_series, geom_col, original_id))
-        edges = network.edges.copy()
-        edge_frames.append((network_idx, edges))
+    all_nodes = pandas.concat(labeled_node_frames, axis=0, sort=False)
+    all_nodes.reset_index(drop=True, inplace=True)
+    geom_col = node_geom_col
 
-    geom_groups: Dict[bytes, List[Tuple[int, "pandas.Series[Any]", Optional[str]]]] = {}
-    geom_order: List[bytes] = []
-    geom_cols: Dict[bytes, str] = {}
-    for network_idx, geom_key, row, geom_col, original_id in node_records:
-        if geom_key not in geom_groups:
-            geom_groups[geom_key] = []
-            geom_order.append(geom_key)
-            geom_cols[geom_key] = geom_col
-        geom_groups[geom_key].append((network_idx, row, original_id))
-
-    canonical_ids: Dict[bytes, Any] = {}
-    for geom_key in geom_order:
-        original_ids = [original_id for _, _, original_id in geom_groups[geom_key]]
+    # Group by geometry using the same equality/hashing that
+    # drop_duplicate_geometries relies on, to assign a canonical id per
+    # shared location and record how each network's original ids map to it.
+    node_id_map: Dict[Tuple[int, Any], Any] = {}
+    canonical_id_by_geom: Dict[Any, Any] = {}
+    for geom, group in all_nodes.groupby(geom_col, sort=False):
         assigned_id = next(
             (
                 original_id
-                for original_id in original_ids
+                for original_id in group["_source_id"]
                 if original_id is not None and not pandas.isna(original_id)
             ),
             None,
         )
         if assigned_id is not None:
-            assigned_id = make_unique_node_id(assigned_id)
+            assigned_id = make_unique_id(assigned_id, used_node_ids)
             used_node_ids.add(assigned_id)
-        canonical_ids[geom_key] = assigned_id
-        for network_idx, _, original_id in geom_groups[geom_key]:
+        canonical_id_by_geom[geom] = assigned_id
+        for network_idx, original_id in zip(
+            group["_source_network"], group["_source_id"]
+        ):
             if original_id is not None and not pandas.isna(original_id):
                 node_id_map[(network_idx, original_id)] = assigned_id
 
-    node_dicts = []
-    for geom_key in geom_order:
-        row = geom_groups[geom_key][0][1].copy()
-        if any_node_has_id:
-            row["id"] = canonical_ids[geom_key]
-        node_dicts.append(row.to_dict())
+    nodes = drop_duplicate_geometries(all_nodes)
+    nodes.reset_index(drop=True, inplace=True)
+    if any_node_has_id:
+        nodes[id_col] = nodes[geom_col].map(canonical_id_by_geom)
+    nodes = nodes.drop(columns=["_source_network", "_source_id"])
 
-    if node_dicts:
-        nodes = GeoDataFrame(node_dicts, geometry=geom_cols[geom_order[0]])
-    else:
-        nodes = GeoDataFrame(geometry=[])
+    edge_geom_col = geometry_column_name(networks[0].edges)
+    any_edge_has_id = any(id_col in network.edges.columns for network in networks)
+
     remapped_edge_frames: List[GeoDataFrame] = []
-    for network_idx, edges in edge_frames:
+    for network_idx, network in enumerate(networks):
+        edges = network.edges.copy()
+        if geometry_column_name(edges) != edge_geom_col:
+            edges = edges.rename_geometry(edge_geom_col)
+        if any_edge_has_id:
+            if id_col not in edges.columns:
+                edges[id_col] = None
+            if not edges.empty:
+                edges[id_col] = prepare_ids(
+                    edges[id_col], f"merge_networks: edges in network {network_idx}"
+                )
+                renamed_ids = []
+                for original_id in edges[id_col]:
+                    unique_id = make_unique_id(original_id, used_edge_ids)
+                    used_edge_ids.add(unique_id)
+                    renamed_ids.append(unique_id)
+                edges[id_col] = renamed_ids
         if not edges.empty and {"from_id", "to_id"}.issubset(edges.columns):
-            edges = edges.copy()
             edges["from_id"] = edges["from_id"].apply(
                 lambda value, idx=network_idx: node_id_map.get((idx, value), value)
             )

@@ -4,7 +4,7 @@ from geopandas import GeoDataFrame
 
 import pandas as pd
 from pandas.testing import assert_frame_equal
-from pytest import fixture, mark
+from pytest import fixture, mark, warns
 from shapely.geometry import Point, LineString, MultiPoint, MultiLineString
 
 try:
@@ -836,6 +836,9 @@ def test_merge_one_network(split):
     merged = snkit.network.merge_networks([split])
     assert_frame_equal(merged.nodes, split.nodes)
     assert_frame_equal(merged.edges, split.edges)
+    assert merged is not split
+    assert merged.nodes is not split.nodes
+    assert merged.edges is not split.edges
 
 
 def test_merge_networks(split):
@@ -897,6 +900,121 @@ def test_merge_networks_preserves_component_ids():
 
     assert list(merged.edges.component_id) == [10, 20]
     assert list(merged.nodes.component_id) == [10, 10, 20]
+
+
+def test_merge_networks_renames_conflicting_edge_ids():
+    a = Point((0, 0))
+    b = Point((0, 2))
+    c = Point((0, 1))
+    d = Point((0, 3))
+
+    left_nodes = GeoDataFrame(data={"id": ["n0", "n1"]}, geometry=[a, c])
+    left_edges = GeoDataFrame(
+        data={"id": ["edge_0"], "from_id": ["n0"], "to_id": ["n1"]},
+        geometry=[LineString([a, c])],
+    )
+
+    right_nodes = GeoDataFrame(data={"id": ["n2", "n3"]}, geometry=[b, d])
+    right_edges = GeoDataFrame(
+        data={"id": ["edge_0"], "from_id": ["n2"], "to_id": ["n3"]},
+        geometry=[LineString([b, d])],
+    )
+
+    merged = snkit.network.merge_networks(
+        [snkit.Network(left_nodes, left_edges), snkit.Network(right_nodes, right_edges)]
+    )
+
+    assert len(merged.edges) == 2
+    assert len(set(merged.edges.id)) == 2, "edge ids should be unique after merge"
+    assert list(merged.edges.id) == ["edge_0", "edge_0_1"]
+
+
+def test_merge_networks_preserves_non_identifier_column_names():
+    a = Point((0, 0))
+    b = Point((0, 2))
+
+    left_nodes = GeoDataFrame(data={"id": ["n0"], "pop 2020": [100]}, geometry=[a])
+    right_nodes = GeoDataFrame(data={"id": ["n1"]}, geometry=[b])
+
+    merged = snkit.network.merge_networks(
+        [snkit.Network(left_nodes), snkit.Network(right_nodes)]
+    )
+
+    assert "pop 2020" in merged.nodes.columns
+    values = list(merged.nodes["pop 2020"])
+    assert values[0] == 100
+    assert pd.isna(values[1])
+
+
+def test_merge_networks_handles_mismatched_geometry_column_names():
+    a = Point((0, 0))
+    b = Point((0, 2))
+    c = Point((0, 1))
+
+    left_nodes = GeoDataFrame(data={"id": ["n0", "n1"]}, geometry=[a, c]).rename_geometry(
+        "geom"
+    )
+    right_nodes = GeoDataFrame(data={"id": ["n2", "n3"]}, geometry=[c, b])
+
+    merged = snkit.network.merge_networks(
+        [snkit.Network(left_nodes), snkit.Network(right_nodes)]
+    )
+
+    # 3 distinct locations (a, c, b) should survive -- c is shared, not a
+    # 4th node lost because left/right use differently-named geometry columns
+    assert len(merged.nodes) == 3
+    assert set(merged.nodes.geometry) == {a, b, c}
+
+
+def test_merge_networks_id_col_parameter():
+    a = Point((0, 0))
+    b = Point((0, 2))
+    c = Point((0, 1))
+
+    left_nodes = GeoDataFrame(data={"asset_id": ["n0", "n1"]}, geometry=[a, c])
+    right_nodes = GeoDataFrame(data={"asset_id": ["n0", "n1"]}, geometry=[c, b])
+
+    merged = snkit.network.merge_networks(
+        [snkit.Network(left_nodes), snkit.Network(right_nodes)], id_col="asset_id"
+    )
+
+    assert "id" not in merged.nodes.columns
+    assert list(merged.nodes.asset_id) == ["n0", "n1", "n1_1"]
+
+
+def test_merge_networks_warns_and_renames_duplicate_ids_within_one_network():
+    a = Point((0, 0))
+    b = Point((0, 2))
+    c = Point((0, 1))
+
+    # left has a pre-existing (invalid) duplicate id "n0" at two locations
+    left_nodes = GeoDataFrame(data={"id": ["n0", "n0"]}, geometry=[a, c])
+    right_nodes = GeoDataFrame(data={"id": ["n2"]}, geometry=[b])
+
+    with warns(UserWarning, match="duplicated"):
+        merged = snkit.network.merge_networks(
+            [snkit.Network(left_nodes), snkit.Network(right_nodes)]
+        )
+
+    # ids are unique in the output -- no silent id_map corruption/overwrite
+    assert list(merged.nodes.id) == ["n0", "n0_1", "n2"]
+
+
+def test_merge_networks_warns_and_fills_null_ids():
+    a = Point((0, 0))
+    b = Point((0, 2))
+
+    left_nodes = GeoDataFrame(data={"id": ["n0"]}, geometry=[a])
+    right_nodes = GeoDataFrame(geometry=[b])  # no id column at all
+
+    with warns(UserWarning, match="null"):
+        merged = snkit.network.merge_networks(
+            [snkit.Network(left_nodes), snkit.Network(right_nodes)]
+        )
+
+    # no null ids survive in the merged output
+    assert not merged.nodes.id.isna().any()
+    assert list(merged.nodes.id) == ["n0", ""]
 
 
 def test_matching_gdf_from_geoms(edge_only):
