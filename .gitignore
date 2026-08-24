@@ -22,6 +22,7 @@ src/snkit/_version.py
 
 # data
 *.gpkg
+.benchmark-data/
 *.shp
 *.prj
 *.dbf

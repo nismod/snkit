@@ -27,6 +27,7 @@ dev = ["mypy", "nbstripout", "pre-commit", "pytest", "pytest-cov", "ruff"]
 docs = ["myst-parser", "sphinx"]
 networkx = ["networkx>=3.0"]
 igraph = ["python-igraph>=1.0"]
+benchmark = ["pyogrio>=0.7"]
 
 [project.urls]
 Homepage = "https://snkit.readthedocs.io/en/latest/"
