@@ -23,7 +23,7 @@ jobs:
       - name: Install dependencies and build python module
         run: |
           python -m pip install --upgrade pip wheel setuptools
-          pip install --verbose .[dev,networkx]
+          pip install --verbose .[dev,networkx,igraph]
 
       - name: Lint with flake8
         run: |
