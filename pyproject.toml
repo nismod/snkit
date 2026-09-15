@@ -43,6 +43,11 @@ include = ["/src"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
+addopts = "--cov=snkit --cov-report=term-missing"
+
+[tool.coverage.run]
+branch = true
+omit = ["src/snkit/_version.py"]
 
 [tool.ruff]
 src = ["src"]
