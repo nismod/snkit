@@ -27,4 +27,4 @@ src/snkit/_version.py
 *.dbf
 *.shx
 *.cpg
-__init__.py
+tmp.*
