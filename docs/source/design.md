@@ -1,9 +1,10 @@
 # Design: a spatial network operations API
 
-**Status: draft for discussion.** Nothing described here under "proposed" is implemented
-yet. This document sets out the concepts, a proposed Python API with small examples, and a
-plan for testing, performance and implementation in other languages. It builds on what
-`snkit` already does and on the open issues it references (`#NN`).
+**Status: implemented as a Python reference implementation**, alongside the existing
+`snkit.network` functions, which are unchanged. This document sets out the concepts, the
+Python API with small examples, and the plan for testing, performance and implementation in
+other languages. It builds on what `snkit` already did and on the open issues it references
+(`#NN`). Section 11 lists what is not yet done.
 
 ## 1. The idea in brief
 
@@ -44,6 +45,8 @@ A `Network` is two tables, as now:
 - `nodes`: `id`, point `geometry`, any other attributes
 - `edges`: `id`, `from_id`, `to_id`, linestring `geometry`, any other attributes
 
+`id`, `from_id` and `to_id` are unsigned integers (section 5).
+
 ### States of a dataset
 
 Data arrives in one of three states. Creation functions move it to the third; every other
@@ -60,7 +63,7 @@ operation requires the third and preserves it.
 `validate(network)` checks these and reports each violation; every operation guarantees
 them on output.
 
-1. Node ids are unique; edge ids are unique.
+1. Node ids are unique unsigned integers; so are edge ids.
 2. Each node geometry is a non-empty Point. Each edge geometry is a non-empty LineString
    with at least two vertices (never a MultiLineString).
 3. Every `from_id` and `to_id` refers to an existing node.
@@ -106,8 +109,9 @@ break.
 
 ### Matchers
 
-Each returns a table. With one network it matches the network against itself; with two it
-matches across them. All take a `tolerance`.
+Each returns a table and changes nothing. A matcher works within one network; to match
+across networks, place them side by side with `combine` and filter on where each side came
+from (section 4.9).
 
 | Matcher | Finds | Table columns |
 | --- | --- | --- |
@@ -132,6 +136,9 @@ computed once, here, and reused by the edit.
 Two smaller edits complete the set: `move_nodes` (carrying incident edge ends with them) and
 `set_edge_geometries` (new shape, same end points), which simplification uses.
 
+Of the edits, `split_edges` is public, taking a table of locations. The others are internal
+for now and reached through the operations below.
+
 ### How the user-facing operations decompose
 
 | Operation | Match | Edit | Today in snkit |
@@ -146,7 +153,8 @@ Two smaller edits complete the set: `move_nodes` (carrying incident edge ends wi
 | `drop_duplicate_edges` | edges ↔ edges | remove edges | - (`#31`) |
 | `union`, `intersection`, `difference` | nodes ↔ nodes, edges ↔ edges across networks | split, merge, remove | - (`#62`) |
 
-Each composite also accepts a `condition`, applied to the match table before editing. That
+Each operation built on a matcher also accepts a `condition`, applied to the match table
+before editing. That
 covers `#58` (only split crossings between edges on the same level), `#19` (only link to an
 edge the node does not already touch - this is the matcher's default) and similar requests
 without a new function for each.
@@ -175,6 +183,13 @@ LINESTRING (1 0, 1 1)         node_2 (2 0)       edge_2  node_1 → node_3
 End points are shared only if exactly equal. To join ends that nearly meet, pass
 `tolerance` (equivalent to `merge_nodes` afterwards).
 
+**Ids.** Ids are unsigned integers, generated from 0 unless supplied. A column can be
+supplied as ids (`edge_id=`, `node_id=`; by default a column named `id` is tried). It is
+used directly only if it holds unique non-negative integers. Any other column - strings,
+floats, negative numbers - is kept as an ordinary attribute, and integer ids are generated
+for the topology. If its name is one the network needs (`id`, `from_id`, `to_id`) it is kept
+as `id_original` and so on.
+
 **From unlinked nodes and lines.** Each line end is attached to an existing node within
 `tolerance`; ends with no such node get a new one.
 
@@ -193,8 +208,25 @@ The line ends moved to node `B`: nodes are anchors. This replaces `add_endpoints
 by `add_topology`, which today attaches each end to the nearest node *however far away it
 is*.
 
-MultiLineStrings are split into one edge per part on the way in; empty and zero-length
-geometries are rejected or dropped according to an `invalid=` option.
+**From tables that already refer to each other.** For data with node ids and from/to
+columns of any type, including networks made by earlier versions of snkit.
+
+```python
+network = snkit.from_topology(nodes, edges, tolerance=1e-6)
+```
+
+```text
+nodes                 edges                                nodes                  edges
+id      geometry      from_id  to_id   geometry            id  id_original        id  from_id  to_id
+node_0  (0 0)         node_0   node_1  (0 0, 1 0)     →    0   node_0             0   0        1
+node_1  (1 0)                                              1   node_1
+```
+
+Each edge end must be within `tolerance` of its node, and is moved exactly onto it.
+
+MultiLineStrings are split into one edge per part on the way in; missing, empty and
+zero-length geometries are rejected or dropped according to an `invalid=` option. Z
+coordinates are dropped.
 
 ### 4.2 Merging nodes that are close together
 
@@ -211,11 +243,15 @@ e1 (1.05 0, 2 0)    n2 → n3               e1 (1.025 0, 2 0)   n1 → n3
 
 Options:
 
-- `position="centroid" | "first"`, or a column giving priority: where the merged node sits.
+- `position="centroid" | "first"`: where the merged node sits - the centroid of its members,
+  or the position of the first member in the nodes table.
 - `geometry="move" | "extend"`: move each incident edge's end vertex to the merged
   position, or keep the original line intact and add a short final segment to reach it.
-- An edge whose two ends merge into the same node and whose length is under tolerance is
-  dropped; a longer one is kept as a self-loop.
+- An edge whose two ends merge into the same node is dropped if it was no longer than the
+  tolerance; a longer one is kept as a self-loop.
+- `max_spread`: refuse to merge if any node would move further than this.
+
+The merged node keeps the id of its first member.
 
 ### 4.3 Linking nodes that are close together
 
@@ -231,7 +267,8 @@ n1 (1 0)   n2 (1.05 0)      →    n1, n2 unchanged, plus edge (1 0, 1.05 0)  n1
 ```
 
 Options: `how="all" | "nearest"`; `condition` (for example, only link nodes in different
-connected components, or only nodes of degree 1).
+connected components, using `label_components`). Pairs that already share an edge are not
+linked again.
 
 ### 4.4 Splitting edges at nearby nodes
 
@@ -265,9 +302,10 @@ e0 (0 0, 2 0)  n0 → n1      →    e0 (0 0, 1 0)   n0 → node_0
 ```
 
 The projected position `(1 0)` is computed once and written into all three lines, so they
-meet exactly. Options: `nodes=` a mask choosing which nodes to project (default: nodes of
-degree 0); `condition`; `link=False` to move the node onto the edge and split, without
-adding a connecting edge.
+meet exactly. Options: `nodes=` a mask choosing which nodes to project (default: nodes with
+no edges); `condition`; `tolerance`, so that a projection landing close to an end of the
+edge connects to the node already there; `link=False` to move the node onto the edge and
+split, without adding a connecting edge.
 
 ### 4.6 Splitting edges where they cross
 
@@ -283,8 +321,9 @@ e1 (0 2, 2 0)               →    (0 0, 1 1)  (1 1, 2 2)  (0 2, 1 1)  (1 1, 2 0
 
 Options: `condition` over the crossings table, for example
 `lambda x: x.level_a == x.level_b`; `tolerance`, so that a crossing close to an existing
-node uses that node rather than creating a tiny edge beside it. Self-crossings of a single
-edge are found too, and are split by default.
+end node of either edge uses that node rather than creating a tiny edge beside it. An edge
+that ends on the middle of another splits it there. Self-crossings of a single edge are
+found too, and are split by default.
 
 ### 4.7 Simplifying edge geometries
 
@@ -313,7 +352,7 @@ e0 (0 0, 1 0)  n0 → n1          →    e0 (0 0, 1 0, 2 0)  n0 → n2
 e1 (2 0, 1 0)  n2 → n1
 ```
 
-`e1` was reversed to join the chain. Options: `by` - only merge edges whose values in these
+`e1` was reversed to join the chain, and the merged edge has a new id. Options: `by` - only merge edges whose values in these
 columns agree (`#33`); `keep` - a mask of degree-2 nodes to retain (a substation on a
 line); `directed=True` - only merge through a node with one edge in and one out, never
 reversing. A closed ring of degree-2 nodes keeps one node.
@@ -338,12 +377,12 @@ both = snkit.link_nodes(both, tolerance=100, condition=lambda m: m.source_a != m
 and share nodes on the cut.
 
 ```python
-whole = snkit.stitch([west, east], tolerance=0.001)    # or on="id" to match nodes by id
+whole = snkit.stitch([west, east], tolerance=0.5)      # or on="id" to match nodes by id
 ```
 
-**Set operations** need a rule for when two features are "the same". Either by key
-(`on="id"`) or by geometry (`tolerance=`): two nodes match if they are within tolerance, and
-two edges match if they run within tolerance of each other between matched ends.
+**Set operations** need a rule for when two features are "the same". Two nodes match if
+they are within tolerance, and two edges match if they join the same matched nodes and their
+lines stay within tolerance of each other.
 
 ```python
 snkit.union(a, b, tolerance=0.5)           # everything, with matched features kept once
@@ -377,12 +416,12 @@ stretch, merges the matched nodes, and keeps one copy of the shared middle:
  from a        in both        from b
 ```
 
-With `keep="a"` (the default) the shared stretch takes `a`'s geometry and `b`'s attributes
-are joined on with a suffix.
+The shared stretch takes `a`'s geometry, attributes and ids; a node in both takes `a`'s
+position.
 
 Options on `match_edges`: `min_length` (default twice the tolerance, so that two roads that
 merely cross are not reported as overlapping for a short stretch around the crossing);
-`max_angle`; `directed`.
+`directed`.
 
 This handles the same feature drawn twice at similar detail. It does not attempt harder
 conflation - a dual carriageway against a single centreline, or networks at very different
@@ -394,24 +433,27 @@ related tools such as `neatnet`.
 **Lineage.** Any operation called with `return_lineage=True` also returns two tables:
 
 - nodes: `id`, `parent_id`
-- edges: `id`, `parent_id`, `parent_start`, `parent_end`, `reversed`
+- edges: `id`, `parent_id`
 
 These are many-to-many: a split gives one parent several children; a merge gives one child
-several parents. Lineage is what the kernel actually computes - attribute handling is built
-on top of it, and it answers `#20` in general.
+several parents. A feature that is entirely new (a node at a crossing, a linking edge) has
+no rows. Lineages of successive operations compose with `first.then(second)`. Lineage is
+what the kernel actually computes - attribute handling is built on top of it, and it answers
+`#20` in general.
 
 **Attributes on split.** Children copy the parent's attributes. Columns named in
 `extensive=[...]` (a cost, a count - quantities that belong to the whole edge) are shared
 out in proportion to length.
 
 **Attributes on merge.** Per-column rule via `agg={column: rule}`; rules are `first`, `sum`,
-`min`, `max`, `mean` (length-weighted for edges), `list`. The default keeps a value only
-when all members agree, and otherwise leaves it null - never a silently wrong value.
+`min`, `max`, `mean`, `list`, or a function. The default keeps a value only when all
+members agree, and otherwise leaves it null - never a silently wrong value.
 
-**Ids.** Existing ids are kept wherever a feature survives unchanged. New features get
-generated ids that cannot collide with existing ones. When an edge is split, the first
-piece keeps the parent's id only if `keep_ids=True`; by default all pieces get new ids, and
-lineage records the parent.
+**Ids.** Ids are unsigned integers. Users may supply them (section 4.1); anything that is
+not a non-negative integer is treated as an attribute. Existing ids are kept wherever a
+feature survives unchanged. New features get ids above the highest in use. When an edge is
+split, all its pieces get new ids; a merged chain of edges gets a new id; a merged group of
+nodes keeps the id of its first member. Lineage records the parents in every case.
 
 ## 6. Robust and approximate geometry
 
@@ -447,29 +489,33 @@ but it is the slowest part of the library and its failure modes are silent.
    existing node uses that node. Cuts within tolerance of each other on one edge share a
    node. So no operation creates an edge shorter than its tolerance.
 5. **Decide with robust tests, construct with ordinary arithmetic.** "Do these segments
-   cross?" uses exact orientation predicates, so the decision is consistent whichever way
-   round it is asked. The crossing coordinate itself is rounded, which is harmless given
-   (2).
+   cross?" should use exact orientation predicates, so the decision is consistent whichever
+   way round it is asked. The crossing coordinate itself is rounded, which is harmless given
+   (2). The Python reference implementation uses plain floating-point orientation tests,
+   on each pair of segments put into a fixed order and direction first, so results do not
+   depend on the order of rows or the direction of edges; exact predicates belong in the
+   native kernel.
 
 ### Known hard cases and the stance on each
 
 | Case | Stance |
 | --- | --- |
 | **Tolerance is not transitive.** A within tolerance of B, and B of C, does not put A within tolerance of C. | `merge_nodes` groups by chains (`A-B-C` all merge) by default: simple and order-independent. It reports the widest group, and `max_spread=` bounds it. |
-| **Moving a line can create a new crossing.** Bending an edge to a node, or inserting a rounded crossing point, shifts it very slightly. | The shift is bounded by the tolerance. Cleaning operations are run to a fixed point: applying one twice gives the same result as once, and this is tested. An optional coordinate grid (`precision=`) gives the stronger guarantee of snap-rounding. |
+| **Moving a line can create a new crossing.** Bending an edge to a node, or inserting a rounded crossing point, shifts it very slightly. | The shift is bounded by the tolerance. Cleaning operations repeat until nothing is left to do (up to a fixed number of passes), so applying one twice gives the same result as once, and this is tested. Snap-rounding to a coordinate grid would give a stronger guarantee and is not yet implemented. |
 | **Edges that overlap along a stretch** rather than crossing at a point. | Not a crossing. `find_crossings` reports only the ends of the shared stretch; `match_edges` handles the overlap. |
 | **Degenerate input**: empty or null geometry, zero-length lines, repeated vertices, multi-part lines, rings. | Dealt with once, at creation, under an explicit option. Afterwards the invariants exclude them. |
 | **Geographic coordinates.** A tolerance in degrees is a different distance east-west than north-south. | Operations taking a distance raise on a geographic CRS, with a pointer to `to_crs` and `estimate_utm_crs` (`#18`). Geodesic distance in the kernel is a later option. |
-| **Z coordinates.** | Carried through and interpolated at cuts. Matching is 2D; `condition` can compare Z or a level attribute. |
+| **Z coordinates.** | Dropped at creation, for now. Matching is 2D; `condition` can compare a level attribute. Carrying Z through and interpolating it at cuts is future work. |
 
 ## 7. Testing
 
-- **Worked examples as tests.** Every example in section 4 is a test, and the same examples
-  form the user documentation.
-- **Shared conformance cases.** Each case is a small file: operation, parameters, input
-  nodes and edges as WKT, expected output. They are data, not Python, so every
-  implementation in any language runs the same cases. This is the cross-language contract.
-- **Property-based tests** over generated networks:
+- **Worked examples as tests.** Every example in section 4 is a test (`tests/test_api.py`),
+  and every public function has a small example in its docstring, also run as a test.
+- **Shared conformance cases** (not yet written). Each case is a small file: operation,
+  parameters, input nodes and edges as WKT, expected output. They are data, not Python, so
+  every implementation in any language runs the same cases. This is the cross-language
+  contract.
+- **Property tests** over randomly generated networks:
   - invariants hold after every operation;
   - cleaning operations are idempotent;
   - results do not depend on the order of input rows, nor (when undirected) on edge
@@ -479,8 +525,8 @@ but it is the slowest part of the library and its failure modes are silent.
 - **Degenerate inputs**, each with a named expected behaviour: empty network, single edge,
   self-loop, parallel edges, ring, self-crossing edge, node exactly on a vertex, crossing
   exactly at an end point, three edges through one point.
-- **Benchmarks** tracked over time (`#61`): a synthetic grid and a real extract, at about
-  1 thousand, 100 thousand and 1 million edges.
+- **Benchmarks** (`#61`): `benchmarks/bench.py` times each operation on a synthetic grid of
+  any size. Still to do: a real extract, and tracking results over time.
 
 ## 8. Performance and other languages
 
@@ -517,13 +563,30 @@ No Python-level loop over features. All cuts on an edge made in one pass. Graph 
 (degree, components, chains) use integer arrays, not table scans. A working target: clean a
 1-million-edge network in tens of seconds on a laptop.
 
+**Where the reference implementation stands.** `python benchmarks/bench.py 1000000`, on a
+grid that becomes one million edges once split at its 600 thousand crossings (one run, one
+core, seconds):
+
+| Operation | 100 thousand edges | 1 million edges |
+| --- | --- | --- |
+| `split_edges_at_crossings` | 1.2 | 12 |
+| `link_nodes_to_edges` (10% as many points) | 0.3 | 3.9 |
+| `merge_nodes` | 0.2 | 2.1 |
+| `split_edges_at_nodes` | 0.5 | 5.5 |
+| `merge_edges` | 0.1 | 1.1 |
+| `simplify_edges` | 2.1 | 26 |
+| `label_components` | 0.2 | 4.6 |
+
+The one remaining Python-level loop is the walk along each chain in `merge_edges`.
+`simplify_edges` is slow because it looks for crossings before and after to guard against
+creating new ones.
+
 **Stages.**
 
-1. *Reference implementation in Python*, on the array kernel, using Shapely 2's bulk
+1. *Reference implementation in Python* (done), on the array kernel, using Shapely 2's bulk
    functions (`STRtree.query` with `dwithin`, `line_locate_point`, ragged-array
-   conversion) and NumPy. This settles the semantics and should already remove most of the
-   slowness listed above.
-2. *Conformance cases and benchmarks* written against it.
+   conversion) and NumPy. `snkit/_kernel.py` holds the part that sees only arrays.
+2. *Conformance cases and benchmarks* written against it (benchmark script done).
 3. *Native kernel* for whichever operations the benchmarks show need it, behind the same
    array interface. Recommended: Rust, for its Arrow and spatial-index libraries and for
    straightforward bindings to Python (PyO3), R (extendr) and the browser (WebAssembly).
@@ -538,20 +601,24 @@ tolerance-wide overlap, replacing the current `SNKIT_PROCESSES` chunking.
 
 ## 9. Migration from the current API
 
-The `Network` class, `read_file`/`to_file`, and the graph converters stay. Existing
-functions keep working as thin wrappers with deprecation notices where the name or
+The `Network` class, `read_file`/`to_file`, and the graph converters stay. The new API is
+exported from the top level (`snkit.merge_edges`), and the existing functions in
+`snkit.network` are untouched for now. A network made with them can be brought across with
+`snkit.from_topology(network.nodes, network.edges, tolerance=...)`. The intention is for
+the existing functions to become thin wrappers, with deprecation notices where the name or
 behaviour changes:
 
 | Current | Proposed |
 | --- | --- |
 | `add_endpoints`, `add_ids`, `add_topology` | `from_edges`, `from_nodes_and_edges` |
-| `split_multilinestrings`, `round_geometries` | options at creation (`precision=`) |
+| `split_multilinestrings` | done at creation |
+| `round_geometries` | a `precision=` option at creation (not yet implemented) |
 | `snap_nodes` | `split_edges_at_nodes(move="node")` |
 | `split_edges_at_nodes` | same name; now creates topology directly |
 | `split_edges_at_intersections` | `split_edges_at_crossings` |
 | `link_nodes_to_nearest_edge`, `link_nodes_to_edges_within` | `link_nodes_to_edges(how=...)` |
 | `merge_edges` | same name; `by`, `keep`, `directed` |
-| `get_connected_components`, `add_component_ids` | unchanged, without requiring networkx |
+| `get_connected_components`, `add_component_ids` | `label_components`, without requiring networkx |
 
 ## 10. Open questions
 
@@ -565,13 +632,38 @@ Each has a recommendation, taken as the working assumption above.
    order-dependent unless a priority column is given.
 4. **Column names.** Fixed as `id`, `from_id`, `to_id` rather than configurable per call
    (today `id_col` is honoured in some functions and hard-coded in others).
-5. **Id type.** Keep whatever the user supplies; generate strings (`node_12`) for new
-   features, as now. Integer ids would be faster but are a visible change.
+5. **Id type.** *Decided:* unsigned integers. A supplied column is used as ids only if it
+   holds non-negative integers; otherwise it is converted to integers for the topology and
+   kept as an ordinary attribute (sections 4.1 and 5).
 6. **Directed networks.** A per-call `directed` flag where it matters, rather than a
    property stored on the `Network`.
 7. **Kernel language.** Rust, decided only after stage 2 shows what needs it.
 8. **Scope of edge matching.** Same-detail overlap only, as in section 4.9; anything harder
    stays outside the library.
+
+## 11. Implementation status
+
+Implemented and tested: everything in section 4, the matchers, lineage, attribute rules,
+validation and the benchmark script.
+
+Not yet done, in rough order of value:
+
+- conformance cases as language-neutral data files (section 7);
+- the existing `snkit.network` functions as wrappers over the new ones (section 9);
+- exact orientation predicates and snap-rounding to a coordinate grid (section 6);
+- Z coordinates carried through operations;
+- parent intervals in lineage (which stretch of the parent each piece of an edge covers);
+- joining `b`'s attributes onto shared edges in `union`;
+- the native kernel and other language front ends (section 8).
+
+Known limits of the reference implementation:
+
+- `match_edges` finds stretches using a buffer of one edge, so the ends of a stretch are
+  accurate to a small fraction of the tolerance, not exact.
+- A crossing is snapped to a node only if that node is an end of one of the two edges
+  crossing, not to any node that happens to be nearby.
+- Set operations merge matching nodes in chains, so two nodes of `a` that are each within
+  tolerance of the same node of `b` become one node.
 
 ## Related work
 

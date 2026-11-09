@@ -134,3 +134,48 @@ Copyright (c) 2018 Tom Russell and snkit contributors
 Initial snkit development was at the [Environmental Change Institute, University of
 Oxford](http://www.eci.ox.ac.uk/) within the EPSRC sponsored MISTRAL programme, as part of the
 [Infrastructure Transition Research Consortium](http://www.itrc.org.uk/).
+
+## Network operations API
+
+`snkit` also has a newer set of functions, available directly as `snkit.<function>`, which
+keep a network's topology exact at every step: ids are integers, every edge names its end
+nodes, and edge geometries end precisely on them.
+
+```python
+import geopandas
+import snkit
+from shapely import LineString, Point
+
+roads = geopandas.GeoDataFrame(
+    {"name": ["High St", "Mill Lane"]},
+    geometry=[LineString([(0, 0), (10, 0)]), LineString([(5, -5), (5, 5)])],
+    crs="EPSG:27700",
+)
+depots = geopandas.GeoDataFrame({"depot": ["north"]}, geometry=[Point(8, 2)], crs="EPSG:27700")
+
+network = snkit.from_nodes_and_edges(depots, roads)   # nodes at line ends, ids, from/to
+network = snkit.split_edges_at_crossings(network)     # a junction where the roads cross
+network = snkit.link_nodes_to_edges(network)          # connect the depot to the nearest road
+```
+
+```
+   id  from_id  to_id       name                geometry
+0   2        1      5    High St   LINESTRING (0 0, 5 0)
+1   6        5      6    High St   LINESTRING (5 0, 8 0)
+2   7        6      2    High St  LINESTRING (8 0, 10 0)
+3   4        3      5  Mill Lane  LINESTRING (5 -5, 5 0)
+4   5        5      4  Mill Lane   LINESTRING (5 0, 5 5)
+5   8        0      6        NaN   LINESTRING (8 2, 8 0)
+```
+
+| To... | Use |
+| --- | --- |
+| build a network | `from_edges`, `from_nodes_and_edges`, `from_topology`, `validate` |
+| look before changing anything | `match_nodes`, `match_nodes_to_edges`, `find_crossings`, `match_edges` |
+| join things up | `merge_nodes`, `link_nodes`, `link_nodes_to_edges`, `split_edges_at_nodes`, `split_edges_at_crossings` |
+| tidy | `merge_edges`, `simplify_edges`, `drop_duplicate_edges`, `label_components` |
+| work with several networks | `combine`, `stitch`, `union`, `intersection`, `difference` |
+
+Each function's documentation has a small example. The
+[design document](docs/source/design.md) explains the ideas, with a worked example of every
+operation.
