@@ -78,6 +78,7 @@ Contents
    :maxdepth: 2
 
    Getting Started <getting_started>
+   Design: spatial network operations API <design>
 
 .. toctree::
    :maxdepth: 3
