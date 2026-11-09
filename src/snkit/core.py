@@ -24,7 +24,7 @@ TO = "to_id"
 GEOM = "geometry"
 RESERVED = (ID, FROM, TO)
 
-Lines = Union[GeoDataFrame, GeoSeries, Iterable[Any]]
+Geometries = Union[GeoDataFrame, GeoSeries, Iterable[Any]]
 Agg = Optional[Dict[str, Union[str, Callable[..., Any]]]]
 
 
@@ -80,7 +80,20 @@ def finish(
     return network, lineage
 
 
-class Arrays:
+class Lines:
+    """Array view of a set of line geometries"""
+
+    def __init__(self, lines: Any):
+        self.lines = lines
+        self.coords, self.offsets = to_ragged(lines)
+        self.m = len(lines)
+        self.seglen = K.segment_lengths(self.coords, self.offsets)
+        self.running = K.running_length(self.seglen)
+        self.measure = K.measures(self.running, self.offsets)
+        self.length = self.measure[self.offsets[1:] - 1] if self.m else np.zeros(0, dtype=float)
+
+
+class Arrays(Lines):
     """Array view of a topological network, as the kernel needs it"""
 
     def __init__(self, network: Network):
@@ -92,23 +105,17 @@ class Arrays:
                     f"{name} table has no {missing} column: build the network with "
                     "snkit.from_edges, from_nodes_and_edges or from_topology first"
                 )
+        super().__init__(geometry_array(edges))
         self.node_ids = nodes[ID].to_numpy(dtype="uint64")
         self.edge_ids = edges[ID].to_numpy(dtype="uint64")
         self.points = geometry_array(nodes)
-        self.lines = geometry_array(edges)
         self.xy = shapely.get_coordinates(self.points).reshape(-1, 2)
         index = pd.Index(self.node_ids)
         self.src = index.get_indexer(edges[FROM].to_numpy(dtype="uint64")).astype(np.int64)
         self.dst = index.get_indexer(edges[TO].to_numpy(dtype="uint64")).astype(np.int64)
         if (self.src < 0).any() or (self.dst < 0).any():
             raise ValueError("edges refer to node ids that are not in the nodes table")
-        self.coords, self.offsets = to_ragged(self.lines)
         self.n = len(self.node_ids)
-        self.m = len(self.edge_ids)
-        self.seglen = K.segment_lengths(self.coords, self.offsets)
-        self.running = K.running_length(self.seglen)
-        self.measure = K.measures(self.running, self.offsets)
-        self.length = self.measure[self.offsets[1:] - 1] if self.m else np.zeros(0, dtype=float)
 
     def degree(self) -> K.IntArray:
         return np.bincount(self.src, minlength=self.n) + np.bincount(self.dst, minlength=self.n)
@@ -212,7 +219,7 @@ def aggregate(table: pd.DataFrame, group: K.IntArray, count: int, agg: Agg) -> p
 # Creation
 
 
-def _as_table(data: Lines) -> GeoDataFrame:
+def _as_table(data: Geometries) -> GeoDataFrame:
     if isinstance(data, GeoDataFrame):
         table = data.copy()
         if table.geometry.name != GEOM:
@@ -303,7 +310,7 @@ def _edge_ends(coords: K.FloatArray, offsets: K.IntArray) -> K.FloatArray:
 
 
 def from_edges(
-    edges: Lines,
+    edges: Geometries,
     tolerance: float = 0,
     edge_id: Optional[str] = None,
     invalid: str = "raise",
@@ -356,8 +363,8 @@ def from_edges(
 
 
 def from_nodes_and_edges(
-    nodes: Lines,
-    edges: Lines,
+    nodes: Geometries,
+    edges: Geometries,
     tolerance: float = 0,
     node_id: Optional[str] = None,
     edge_id: Optional[str] = None,

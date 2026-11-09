@@ -14,7 +14,7 @@ import pandas as pd
 import shapely
 
 from snkit import _kernel as K
-from snkit.core import GEOM, ID, Arrays, check_distance
+from snkit.core import GEOM, ID, Arrays, Lines, check_distance
 from snkit.network import Network
 
 Condition = Optional[Callable[[pd.DataFrame], Any]]
@@ -209,7 +209,7 @@ def match_nodes_to_edges(
     return apply_condition(matches, condition, network, {"node": "nodes", "edge": "edges"})
 
 
-def crossing_events(arrays: Arrays) -> pd.DataFrame:
+def crossing_events(arrays: Lines, end_to_end: bool = False) -> pd.DataFrame:
     """Places where edges meet away from a shared end, by position.
 
     Columns, for each side ``a`` and ``b``: ``edge``, ``vertex`` and ``frac``
@@ -269,8 +269,9 @@ def crossing_events(arrays: Arrays) -> pd.DataFrame:
     data["x"], data["y"] = xy[:, 0], xy[:, 1]
     events = pd.DataFrame(data)
     events = events.drop_duplicates(["edge_a", "vertex_a", "frac_a", "edge_b", "vertex_b", "frac_b"])
-    # where two edges meet end to end there is a node already, or two nodes to merge
-    events = events[(events["end_a"] == 0) | (events["end_b"] == 0)]
+    if not end_to_end:
+        # where two edges meet end to end there is a node already, or two nodes to merge
+        events = events[(events["end_a"] == 0) | (events["end_b"] == 0)]
     # one place on one edge is not a crossing
     same = (events["edge_a"] == events["edge_b"]) & (events["measure_a"] == events["measure_b"])
     events = events[~same]

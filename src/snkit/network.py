@@ -2,10 +2,6 @@
 
 from __future__ import annotations
 
-from functools import partial
-import logging
-import multiprocessing
-import os
 from typing import Any, Callable, List, Optional, Set, Tuple, Union
 import warnings
 
@@ -44,34 +40,9 @@ from shapely.ops import split, linemerge, unary_union
 
 from collections import Counter
 
-# optional progress bars
-if "SNKIT_PROGRESS" in os.environ and os.environ["SNKIT_PROGRESS"] in ("1", "TRUE"):
-    try:
-        from tqdm import tqdm
-    except ImportError:
-        from snkit.utils import tqdm_standin as tqdm  # type: ignore
-else:
-    from snkit.utils import tqdm_standin as tqdm  # type: ignore
-
-# optional parallel processing
-if "SNKIT_PROCESSES" in os.environ:
-    processes_env_var = os.environ["SNKIT_PROCESSES"]
-    try:
-        requested_processes = int(processes_env_var)
-    except TypeError:
-        raise RuntimeError(
-            "SNKIT_PROCESSES env var must be a non-negative integer. Use 0 or unset for serial operation."
-        )
-    cpus = os.cpu_count()
-    if cpus is None:
-        cpus = 1
-    PARALLEL_PROCESS_COUNT: int = min([cpus, requested_processes])
-
-    logging.info(
-        f"SNKIT_PROCESSES={processes_env_var}, using {PARALLEL_PROCESS_COUNT} processes"
-    )
-else:
-    PARALLEL_PROCESS_COUNT = 0
+# SNKIT_PROGRESS and SNKIT_PROCESSES were read here to turn on progress bars
+# and parallel processing. Operations now run in bulk, so neither has any effect.
+PARALLEL_PROCESS_COUNT = 0
 
 Number = Union[int, float]
 
@@ -225,48 +196,34 @@ def add_ids(
 
 
 def add_topology(network: Network, id_col: str = "id") -> Network:
-    """Add or replace from_id, to_id to edges"""
-    from_ids = []
-    to_ids = []
+    """Add or replace from_id, to_id to edges
 
-    for edge in tqdm(
-        network.edges.itertuples(), desc="topology", total=len(network.edges)
-    ):
-        start, end = line_endpoints(edge.geometry)
-
-        start_node = nearest_node(start, network.nodes)
-        from_ids.append(start_node[id_col])
-
-        end_node = nearest_node(end, network.nodes)
-        to_ids.append(end_node[id_col])
-
+    Each end of each edge is given the id of the node nearest to it, however
+    far away that is. See :func:`snkit.from_nodes_and_edges` for a version
+    that only attaches ends to nodes within a tolerance.
+    """
     edges = network.edges.copy()
-    edges["from_id"] = from_ids
-    edges["to_id"] = to_ids
+    if len(edges) == 0:
+        edges["from_id"] = []
+        edges["to_id"] = []
+        return Network(nodes=network.nodes, edges=edges)
 
+    ends = _line_ends(_geoms(edges))
+    tree = shapely.STRtree(_geoms(network.nodes))
+    ids = network.nodes[id_col].to_numpy()[tree.nearest(shapely.points(ends))]
+    edges["from_id"] = ids[0::2]
+    edges["to_id"] = ids[1::2]
     return Network(nodes=network.nodes, edges=edges)
 
 
 def get_endpoints(network: Network) -> GeoDataFrame:
     """Get nodes for each edge endpoint"""
-    endpoints = []
-    for edge in tqdm(
-        network.edges.itertuples(), desc="endpoints", total=len(network.edges)
-    ):
-        if edge.geometry is None:
-            continue
-        if edge.geometry.geom_type == "MultiLineString":
-            for line in edge.geometry.geoms:
-                start, end = line_endpoints(line)
-                endpoints.append(start)
-                endpoints.append(end)
-        else:
-            start, end = line_endpoints(edge.geometry)
-            endpoints.append(start)
-            endpoints.append(end)
+    geoms = _geoms(network.edges)
+    parts = shapely.get_parts(geoms[~shapely.is_missing(geoms)])
+    endpoints = shapely.points(_line_ends(parts)) if len(parts) else []
 
     # create dataframe to match the nodes geometry column name
-    return matching_gdf_from_geoms(network.nodes, endpoints)
+    return matching_gdf_from_geoms(network.nodes, list(endpoints))
 
 
 def add_endpoints(network: Network) -> Network:
@@ -279,11 +236,9 @@ def add_endpoints(network: Network) -> Network:
 
 def round_geometries(network: Network, precision: int = 3) -> Network:
     """Round coordinates of all node points and vertices of edge linestrings to some precision"""
-
-    _set_precision = partial(set_precision, precision=precision)
-
-    network.nodes.geometry = network.nodes.geometry.apply(_set_precision)
-    network.edges.geometry = network.edges.geometry.apply(_set_precision)
+    for table in (network.nodes, network.edges):
+        if len(table):
+            table.geometry = _round(_geoms(table), precision)
     return network
 
 
@@ -337,132 +292,90 @@ def merge_multilinestring(geom: Geometry) -> Geometry:
 
 def snap_nodes(network: Network, threshold: Optional[Number] = None) -> Network:
     """Move nodes (within threshold) to edges"""
-
-    def snap_node(geom: Point) -> Point:
-        snap = nearest_point_on_edges(geom, network.edges)
-        distance = snap.distance(geom)
-        if threshold is not None and distance > threshold:
-            snap = geom
-        return snap
-
-    geom_col = geometry_column_name(network.nodes)
-    snapped_geoms = network.nodes[geom_col].apply(snap_node)
-    nodes = GeoDataFrame(
-        pandas.concat(
-            [
-                network.nodes.drop(geom_col, axis=1),
-                GeoDataFrame(snapped_geoms, columns=[geom_col]),
-            ],
-            axis=1,
-        ),
-        crs=network.nodes.crs,
-    )
+    nodes = network.nodes.copy()
+    if len(nodes) and len(network.edges):
+        points, lines = _geoms(nodes), _geoms(network.edges)
+        nearest_line = lines[shapely.STRtree(lines).nearest(points)]
+        snapped = shapely.line_interpolate_point(nearest_line, shapely.line_locate_point(nearest_line, points))
+        if threshold is not None:
+            snapped = np.where(shapely.distance(snapped, points) > threshold, points, snapped)
+        nodes[geometry_column_name(nodes)] = geopandas.GeoSeries(snapped, index=nodes.index, crs=nodes.crs)
 
     return Network(nodes=nodes, edges=network.edges)
 
 
-def _split_edges_at_nodes(
-    edges: GeoDataFrame, nodes: GeoDataFrame, tolerance: float
-) -> List["pandas.Series[Any]"]:
-    """Split edges at nodes for a network chunk"""
-    split_edges = []
-
-    for edge in edges.itertuples(index=False):
-        hits = nodes_intersecting(edge.geometry, nodes, tolerance)
-        split_points = MultiPoint([hit.geometry for hit in hits.itertuples()])
-
-        # potentially split to multiple edges
-        edges = split_edge_at_points(edge, split_points, tolerance)
-        split_edges.append(edges)
-
-    return split_edges
 
 
-def split_edges_at_nodes(
-    network: Network, tolerance: Number = 1e-9, chunk_size: Optional[int] = None
-) -> Network:
+
+def split_edges_at_nodes(network: Network, tolerance: Number = 1e-9, chunk_size: Optional[int] = None) -> Network:
     """
     Split network edges where they intersect node geometries.
-
-    N.B. Can operate in parallel if SNKIT_PROCESSES is in the environment and a
-    positive integer.
 
     Args:
         network: Network object to split edges for.
         tolerance: Proximity within which nodes are said to intersect an edge.
-        chunk_size: When splitting in parallel, set the number of edges per
-            unit of work.
+        chunk_size: No longer used. The work is done in bulk, so there is
+            nothing to gain from splitting it between processes.
 
     Returns:
         Network with edges split at nodes (within proximity tolerance).
     """
-    split_edges: List["pandas.Series[Any]"] = []
+    edges = network.edges
+    if len(edges) == 0 or len(network.nodes) == 0:
+        return Network(nodes=network.nodes, edges=edges)
+    from snkit.core import Lines
 
-    n = len(network.edges)
-    if PARALLEL_PROCESS_COUNT > 1:
-        if chunk_size is None:
-            chunk_size = max([1, int(n / PARALLEL_PROCESS_COUNT)])
-        args = [
-            (network.edges.iloc[i : i + chunk_size, :], network.nodes, tolerance)
-            for i in range(0, n, chunk_size)
-        ]
-        with multiprocessing.Pool(PARALLEL_PROCESS_COUNT) as pool:
-            results = pool.starmap(_split_edges_at_nodes, args)
+    lines = Lines(_geoms(edges))
+    points = _geoms(network.nodes)
+    node, edge = shapely.STRtree(lines.lines).query(points, predicate="dwithin", distance=tolerance)
+    xy = shapely.get_coordinates(points)[node]
+    measure = shapely.line_locate_point(lines.lines[edge], points[node])
+    return Network(nodes=network.nodes, edges=_cut_edges(edges, lines, edge, measure, xy))
 
-        # flatten return list
-        split_edges = [df for chunk in results for df in chunk]
 
-    else:
-        split_edges = _split_edges_at_nodes(network.edges, network.nodes, tolerance)
+def split_edges_at_intersections(network: Network, tolerance: Optional[Number] = 1e-9) -> Network:
+    """Split network edges where they intersect line geometries
 
-    # combine dfs
-    edges = (
-        pandas.concat(split_edges, axis=0)
-        .reset_index()
-        .drop("index", axis=1)
-        .set_crs(network.edges.crs, allow_override=True)
+    Edges are split where they cross, where one ends on another, where an edge
+    crosses itself, and at each end of a stretch that two edges share. A node
+    is added at each of these places and at both ends of every edge, unless
+    there is a node there already.
+
+    Args:
+        network: Network object to split edges for.
+        tolerance: No longer used. Edges are split only where they meet.
+    """
+    edges = network.edges
+    if len(edges) == 0:
+        return Network(nodes=network.nodes, edges=edges)
+    from snkit.core import Lines
+    from snkit.match import crossing_events
+
+    lines = Lines(_geoms(edges))
+    events = crossing_events(lines, end_to_end=True)
+    xy = events[["x", "y"]].to_numpy()
+    cut_edge, cut_measure, cut_xy, cut_seg = [], [], [], []
+    for side in "ab":
+        interior = events[f"end_{side}"].to_numpy() == 0
+        cut_edge.append(events[f"edge_{side}"].to_numpy(dtype=np.int64)[interior])
+        cut_measure.append(events[f"measure_{side}"].to_numpy(dtype=float)[interior])
+        cut_seg.append(events[f"vertex_{side}"].to_numpy(dtype=np.int64)[interior])
+        cut_xy.append(xy[interior])
+    split = _cut_edges(
+        edges,
+        lines,
+        np.concatenate(cut_edge),
+        np.concatenate(cut_measure),
+        np.concatenate(cut_xy),
+        np.concatenate(cut_seg),
     )
 
-    return Network(nodes=network.nodes, edges=edges)
-
-
-def split_edges_at_intersections(
-    network: Network, tolerance: Optional[Number] = 1e-9
-) -> Network:
-    """Split network edges where they intersect line geometries"""
-    split_edges = []
-    split_points = []
-    for edge in tqdm(
-        network.edges.itertuples(index=False), desc="split", total=len(network.edges)
-    ):
-        # note: the symmetry of intersection is not exploited here.
-        # (If A intersects B, then B intersects A)
-        # since edges are not modified within the loop, this has just
-        # potential performance consequences.
-
-        hits_points = edges_intersecting_points(edge.geometry, network.edges, tolerance)
-
-        # store the split edges and intersection points
-        split_points.extend(hits_points)
-        hits_points = MultiPoint(hits_points)
-        edges = split_edge_at_points(edge, hits_points, tolerance)
-        split_edges.append(edges)
-
-    # add the (potentially) split edges
-    edges = pandas.concat(split_edges, axis=0)
-    edges = edges.reset_index().drop("index", axis=1)
-
-    # combine the original nodes with the new intersection nodes
-    # dropping the duplicates.
-    # note: there are at least duplicates from above since intersections
-    # are checked twice
-    # note: intersection nodes are appended, and if any duplicates, the
-    # original counterparts are kept.
-    nodes = GeoDataFrame(geometry=split_points)
-    nodes = pandas.concat([network.nodes, nodes], axis=0).drop_duplicates()
-    nodes = nodes.reset_index().drop("index", axis=1)
-
-    return Network(nodes=nodes, edges=edges)
+    # combine the original nodes with nodes where edges meet and at the ends of
+    # every edge, keeping the original where there is already a node at the same place
+    places = np.concatenate([xy, _line_ends(lines.lines)])
+    new_nodes = matching_gdf_from_geoms(network.nodes, list(shapely.points(places)))
+    nodes = concat_dedup([network.nodes, new_nodes])
+    return Network(nodes=nodes, edges=split)
 
 
 NodeEdgeCondition = Callable[["pandas.Series[Any]", "pandas.Series[Any]"], bool]
@@ -475,75 +388,120 @@ def link_nodes_to_edges_within(
     tolerance: Number = 1e-9,
 ) -> Network:
     """Link nodes to all edges within some distance"""
-    new_node_geoms = []
-    new_edge_geoms = []
-    for node in tqdm(
-        network.nodes.itertuples(index=False), desc="link", total=len(network.nodes)
-    ):
-        # for each node, find edges within
-        edges = edges_within(node.geometry, network.edges, distance)
-        for edge in edges.itertuples():
-            if condition is not None and not condition(node, edge):
-                continue
-            # add nodes at points-nearest
-            point = nearest_point_on_line(node.geometry, edge.geometry)
-            if point != node.geometry:
-                new_node_geoms.append(point)
-                # add edges linking
-                line = LineString([node.geometry, point])
-                new_edge_geoms.append(line)
-
-    new_nodes = matching_gdf_from_geoms(network.nodes, new_node_geoms)
-    all_nodes = concat_dedup([network.nodes, new_nodes])
-
-    new_edges = matching_gdf_from_geoms(network.edges, new_edge_geoms)
-    all_edges = concat_dedup([network.edges, new_edges])
-
-    # split edges as necessary after new node creation
-    unsplit = Network(nodes=all_nodes, edges=all_edges)
-    return split_edges_at_nodes(unsplit, tolerance)
+    if len(network.nodes) == 0 or len(network.edges) == 0:
+        return network
+    points, lines = _geoms(network.nodes), _geoms(network.edges)
+    node, edge = shapely.STRtree(lines).query(points, predicate="dwithin", distance=distance)
+    order = np.lexsort((edge, node))
+    node, edge = node[order], edge[order]
+    if condition is not None:
+        node_rows = list(network.nodes.itertuples(index=False))
+        edge_rows = list(network.edges.itertuples())
+        keep = [bool(condition(node_rows[n], edge_rows[e])) for n, e in zip(node, edge)]
+        node, edge = node[keep], edge[keep]
+    return _link(network, node, edge, tolerance)
 
 
 def link_nodes_to_nearest_edge(
     network: Network,
     condition: Optional[NodeEdgeCondition] = None,
 ) -> Network:
-    """Link nodes to all edges within some distance"""
-    new_node_geoms = []
-    new_edge_geoms = []
-    for node in tqdm(
-        network.nodes.itertuples(index=False), desc="link", total=len(network.nodes)
-    ):
-        # for each node, find edges within
-        edge = nearest_edge(node.geometry, network.edges)
-        if condition is not None and not condition(node, edge):
-            continue
-        # add nodes at points-nearest
-        point = nearest_point_on_line(node.geometry, edge.geometry)
-        if point != node.geometry:
-            new_node_geoms.append(point)
-            # add edges linking
-            line = LineString([node.geometry, point])
-            new_edge_geoms.append(line)
+    """Link nodes to the nearest edge"""
+    if len(network.nodes) == 0 or len(network.edges) == 0:
+        return network
+    points, lines = _geoms(network.nodes), _geoms(network.edges)
+    node = np.arange(len(points))
+    edge = shapely.STRtree(lines).nearest(points)
+    if condition is not None:
+        node_rows = list(network.nodes.itertuples(index=False))
+        keep = [bool(condition(node_rows[n], network.edges.iloc[e])) for n, e in zip(node, edge)]
+        node, edge = node[keep], edge[keep]
+    return _link(network, node, edge, 1e-9)
 
-    new_nodes = matching_gdf_from_geoms(network.nodes, new_node_geoms)
+
+def _link(network: Network, node: Any, edge: Any, tolerance: Number) -> Network:
+    """Add a node at the nearest place on each edge to each node, and an edge to it"""
+    points, lines = _geoms(network.nodes)[node], _geoms(network.edges)[edge]
+    nearest = shapely.line_interpolate_point(lines, shapely.line_locate_point(lines, points))
+    start, end = shapely.get_coordinates(points), shapely.get_coordinates(nearest)
+    apart = (start != end).any(axis=1)
+    links = shapely.linestrings(np.stack([start[apart], end[apart]], axis=1))
+
+    new_nodes = matching_gdf_from_geoms(network.nodes, list(nearest[apart]))
     all_nodes = concat_dedup([network.nodes, new_nodes])
-
-    new_edges = matching_gdf_from_geoms(network.edges, new_edge_geoms)
+    new_edges = matching_gdf_from_geoms(network.edges, list(links))
     all_edges = concat_dedup([network.edges, new_edges])
 
     # split edges as necessary after new node creation
-    unsplit = Network(nodes=all_nodes, edges=all_edges)
+    return split_edges_at_nodes(Network(nodes=all_nodes, edges=all_edges), tolerance)
 
-    # this step is typically the majority of processing time
-    split = split_edges_at_nodes(unsplit)
 
+def _geoms(table: GeoDataFrame) -> Any:
+    return np.asarray(table.geometry.values, dtype=object)
+
+
+def _line_ends(lines: Any) -> Any:
+    """Start and end coordinates of each line, interleaved"""
+    from snkit.core import _edge_ends, to_ragged
+
+    return _edge_ends(*to_ragged(lines))
+
+
+def _round(geoms: Any, precision: int) -> Any:
+    geoms = geoms.copy()
+    present = ~shapely.is_missing(geoms)
+    for has_z in (False, True):
+        chosen = present & (shapely.has_z(geoms) == has_z)
+        if chosen.any():
+            geoms[chosen] = shapely.transform(
+                geoms[chosen], lambda coords: np.round(coords, precision), include_z=has_z
+            )
+    return geoms
+
+
+def _cut_edges(
+    edges: GeoDataFrame, lines: Any, edge: Any, measure: Any, xy: Any, seg: Optional[Any] = None
+) -> GeoDataFrame:
+    """Cut edges at places along them, putting the given coordinate at each cut.
+
+    Attributes are copied to each piece. A place at the very end of an edge
+    cuts it only if its coordinate differs from the end's.
+    """
+    from snkit import _kernel as K
+    from snkit.core import from_ragged
+
+    edge = np.asarray(edge, dtype=np.int64)
+    first, last = lines.offsets[edge], lines.offsets[edge + 1] - 1
+    at_end = (xy == lines.coords[first]).all(axis=1) | (xy == lines.coords[last]).all(axis=1)
+    if seg is None:
+        seg = K.locate_segment(lines.running, lines.offsets, edge, measure)
+    else:
+        seg = np.clip(seg, first, last - 1)
+    table = pandas.DataFrame(
+        {"edge": edge, "seg": seg, "measure": measure, "x": xy[:, 0], "y": xy[:, 1]}
+    )[~at_end]
+    table = table.sort_values(["edge", "seg", "measure", "x", "y"], kind="stable")
+    table = table.drop_duplicates(["edge", "measure", "x", "y"])
+    if len(table) == 0:
+        return edges
+    cut_edge = table["edge"].to_numpy()
+    nothing = np.zeros(lines.m, dtype=np.int64)
+    coords, offsets, _, _, parent = K.split(
+        lines.coords,
+        lines.offsets,
+        nothing,
+        nothing,
+        cut_edge,
+        table["seg"].to_numpy(),
+        table[["x", "y"]].to_numpy(),
+        np.zeros(len(cut_edge), dtype=np.int64),
+    )
+    split = edges.iloc[parent].reset_index(drop=True)
+    split[geometry_column_name(edges)] = geopandas.GeoSeries(from_ragged(coords, offsets), crs=edges.crs)
     return split
 
 
-def merge_edges(
-    network: Network, id_col: Optional[str] = "id", by: Optional[List[str]] = None
-) -> Network:
+def merge_edges(network: Network, id_col: Optional[str] = "id", by: Optional[List[str]] = None) -> Network:
     """Merge edges that share a node with a connectivity degree of 2
 
     Parameters
@@ -553,95 +511,48 @@ def merge_edges(
     by : List[string], optional
       list of columns to use when merging an edge path - will not merge if
       edges have different values.
+
+    Notes
+    -----
+    A merged edge takes the attributes, including the id, of the first of
+    the edges it was made from, and takes that edge's place in the table.
     """
-    if "degree" not in network.nodes.columns:
-        network.nodes["degree"] = network.nodes[id_col].apply(
-            lambda x: node_connectivity_degree(x, network)
-        )
+    from snkit.core import from_topology
+    from snkit.operations import merge_edges as merge
 
-    degree2 = list(network.nodes[id_col].loc[network.nodes.degree == 2])
-    d2_set = set(degree2)
-    edge_paths = []
-
-    while d2_set:
-        if len(d2_set) % 1000 == 0:
-            print(len(d2_set))
-        popped_node = d2_set.pop()
-        node_path = set([popped_node])
-        candidates = set([popped_node])
-        while candidates:
-            popped_cand = candidates.pop()
-            matches = set(
-                np.unique(
-                    network.edges[["from_id", "to_id"]]
-                    .loc[
-                        (network.edges.from_id == popped_cand)
-                        | (network.edges.to_id == popped_cand)
-                    ]
-                    .values
-                )
-            )
-            matches.remove(popped_cand)
-            matches = matches - node_path
-            for match in matches:
-                if match in degree2:
-                    candidates.add(match)
-                    node_path.add(match)
-                    d2_set.remove(match)
-                else:
-                    node_path.add(match)
-        if len(node_path) > 2:
-            edge_paths.append(
-                network.edges.loc[
-                    (network.edges.from_id.isin(node_path))
-                    & (network.edges.to_id.isin(node_path))
-                ]
-            )
-
-    concat_edge_paths = []
-    unique_edge_ids = set()
-    new_node_ids = set(network.nodes[id_col]) - set(degree2)
-
-    for edge_path in tqdm(edge_paths, desc="merge_edge_paths"):
-        unique_edge_ids.update(list(edge_path[id_col]))
-        edge_path = edge_path.dissolve(by=by)
-        edge_path_dicts = []
-        for edge in edge_path.itertuples(index=False):
-            if edge.geometry.geom_type == "MultiLineString":
-                edge_geom = linemerge(edge.geometry)
-                if edge_geom.geom_type == "MultiLineString":
-                    edge_geoms = list(edge_geom)
-                else:
-                    edge_geoms = [edge_geom]
-            else:
-                edge_geoms = [edge.geometry]
-            for geom in edge_geoms:
-                start, end = line_endpoints(geom)
-                start = nearest_node(start, network.nodes)
-                end = nearest_node(end, network.nodes)
-                edge_path_dict = {
-                    "from_id": start[id_col],
-                    "to_id": end[id_col],
-                    "geometry": geom,
-                }
-                for i, col in enumerate(edge_path.columns):
-                    if col not in ("from_id", "to_id", "geometry"):
-                        edge_path_dict[col] = edge[i]
-                edge_path_dicts.append(edge_path_dict)
-
-        concat_edge_paths.append(geopandas.GeoDataFrame(edge_path_dicts))
-        new_node_ids.update(list(edge_path.from_id) + list(edge_path.to_id))
-
-    edges_new = network.edges.copy()
-    edges_new = edges_new.loc[~(edges_new.id.isin(list(unique_edge_ids)))]
-    edges_new.geometry = edges_new.geometry.apply(merge_multilinestring)
-    edges = pandas.concat(
-        [edges_new, pandas.concat(concat_edge_paths).reset_index()], sort=False
+    nodes, edges = network.nodes, network.edges
+    if len(edges) == 0:
+        return network
+    position = pandas.Index(nodes[id_col])
+    temp_nodes = GeoDataFrame({"id": np.arange(len(nodes))}, geometry=_geoms(nodes), crs=nodes.crs)
+    temp_edges = GeoDataFrame(
+        {
+            "id": np.arange(len(edges)),
+            "from_id": position.get_indexer(edges["from_id"]),
+            "to_id": position.get_indexer(edges["to_id"]),
+            **{column: edges[column].to_numpy() for column in by or []},
+        },
+        geometry=_geoms(edges),
+        crs=edges.crs,
     )
+    # ends are moved exactly onto their nodes, as merging by topology requires
+    merged, lineage = merge(
+        from_topology(temp_nodes, temp_edges, tolerance=np.inf), by=by, return_lineage=True
+    )
+    first = lineage.edges.drop_duplicates("id").set_index("id")["parent_id"]
+    out_edges = edges.iloc[first.reindex(merged.edges["id"]).to_numpy()].reset_index(drop=True)
+    # the temporary ids are positions in the original tables
+    node_ids = nodes[id_col].to_numpy()
+    kept = merged.nodes["id"].to_numpy(dtype=np.int64)
+    out_edges["from_id"] = node_ids[merged.edges["from_id"].to_numpy(dtype=np.int64)]
+    out_edges["to_id"] = node_ids[merged.edges["to_id"].to_numpy(dtype=np.int64)]
+    out_edges[geometry_column_name(edges)] = geopandas.GeoSeries(_geoms(merged.edges), crs=edges.crs)
 
-    nodes = network.nodes.set_index(id_col).loc[list(new_node_ids)].copy().reset_index()
-
-    return Network(nodes=nodes, edges=edges)
+    out_nodes = nodes.iloc[kept].reset_index(drop=True)
+    if "degree" not in out_nodes.columns:
+        ends = pandas.concat([out_edges["from_id"], out_edges["to_id"]]).value_counts()
+        out_nodes["degree"] = ends.reindex(out_nodes[id_col]).fillna(0).astype(int).to_numpy()
+    return Network(nodes=out_nodes, edges=out_edges)
 
 
 def geometry_column_name(gdf: GeoDataFrame) -> str:
@@ -1069,17 +980,15 @@ def to_igraph(
     edge_list = []
     weights = []
 
-    for edge in network.edges.itertuples(index=False):
-        from_idx = node_id_to_idx[edge.from_id]
-        to_idx = node_id_to_idx[edge.to_id]
-        edge_list.append((from_idx, to_idx))
-
-        # Get weight from specified column or use geometry length
-        if weight_col is None:
-            weight = edge.geometry.length
-        else:
-            weight = getattr(edge, weight_col)
-        weights.append(weight)
+    edge_list = [
+        (node_id_to_idx[from_id], node_id_to_idx[to_id])
+        for from_id, to_id in zip(network.edges.from_id, network.edges.to_id)
+    ]
+    # Get weight from specified column or use geometry length
+    if weight_col is None:
+        weights = network.edges.geometry.length.to_list()
+    else:
+        weights = network.edges[weight_col].to_list()
 
     # Add edges to graph
     g.add_edges(edge_list)

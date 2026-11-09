@@ -66,9 +66,7 @@ def test_split_multilinestrings_rejects_non_line_geometry():
 
 def test_merge_multilinestring_variants():
     connected = MultiLineString([[(0, 0), (1, 0)], [(1, 0), (2, 0)]])
-    ring = MultiLineString(
-        [[(0, 0), (1, 0)], [(1, 0), (0.5, 1)], [(0.5, 1), (0, 0)]]
-    )
+    ring = MultiLineString([[(0, 0), (1, 0)], [(1, 0), (0.5, 1)], [(0.5, 1), (0, 0)]])
     line = LineString([(0, 0), (1, 0)])
 
     assert network.merge_multilinestring(connected) == LineString([(0, 0), (1, 0), (2, 0)])
@@ -214,3 +212,96 @@ def test_optional_graph_backends_raise_clear_errors(monkeypatch):
 
 def test_geometry_column_name_falls_back_for_plain_dataframe():
     assert network.geometry_column_name(pd.DataFrame()) == "geometry"
+
+
+def test_split_edges_at_nodes_inserts_into_the_right_segment():
+    # the line doubles back, so the node is nearest in distance to the first
+    # vertex but lies on the second segment
+    line = LineString([(0, 0), (10, 0), (2, 1), (2, 5)])
+    net = snkit.Network(GeoDataFrame(geometry=[Point(6, 0.5)]), GeoDataFrame({"name": ["a"]}, geometry=[line]))
+    split = network.split_edges_at_nodes(net)
+    assert split.edges.geometry.to_list() == [
+        LineString([(0, 0), (10, 0), (6, 0.5)]),
+        LineString([(6, 0.5), (2, 1), (2, 5)]),
+    ]
+    assert split.edges.name.to_list() == ["a", "a"]
+    assert split.edges.geometry.length.sum() == pytest.approx(line.length)
+
+
+def test_split_edges_at_nodes_orders_several_nodes_along_the_edge():
+    nodes = GeoDataFrame(geometry=[Point(3, 0.1), Point(1, -0.1), Point(2, 0)])
+    edges = GeoDataFrame(geometry=[LineString([(0, 0), (4, 0)])], crs="EPSG:27700")
+    split = network.split_edges_at_nodes(snkit.Network(nodes, edges), tolerance=0.5)
+    assert split.edges.geometry.to_list() == [
+        LineString([(0, 0), (1, -0.1)]),
+        LineString([(1, -0.1), (2, 0)]),
+        LineString([(2, 0), (3, 0.1)]),
+        LineString([(3, 0.1), (4, 0)]),
+    ]
+    assert split.edges.crs == edges.crs
+
+
+def test_split_edges_at_intersections_cuts_only_where_edges_meet():
+    bent = LineString([(0, 0), (1, 1), (2, 0), (3, 1)])
+    crossing = LineString([(0, 0.5), (0.9, 0.5)])
+    nodes = GeoDataFrame({"name": ["start"]}, geometry=[Point(0, 0)], crs="EPSG:27700")
+    edges = GeoDataFrame(geometry=[bent, crossing], crs="EPSG:27700")
+    split = network.split_edges_at_intersections(snkit.Network(nodes, edges))
+    # the bent edge is cut once, at the crossing, and not at its corners
+    assert split.edges.geometry.to_list() == [
+        LineString([(0, 0), (0.5, 0.5)]),
+        LineString([(0.5, 0.5), (1, 1), (2, 0), (3, 1)]),
+        LineString([(0, 0.5), (0.5, 0.5)]),
+        LineString([(0.5, 0.5), (0.9, 0.5)]),
+    ]
+    # a node where the edges cross and at the ends of each edge; the existing node is kept once
+    assert split.nodes.geometry.to_list() == [Point(0, 0), Point(0.5, 0.5), Point(3, 1), Point(0, 0.5), Point(0.9, 0.5)]
+    assert split.nodes.name.to_list()[0] == "start"
+    assert split.nodes.crs == nodes.crs
+
+
+def test_merge_edges_with_nothing_to_merge():
+    points = [Point(0, 0), Point(1, 0), Point(1, 1), Point(2, 0)]
+    nodes = GeoDataFrame({"id": list("abcd")}, geometry=points)
+    edges = GeoDataFrame(
+        {"id": ["e1", "e2", "e3"]},
+        geometry=[
+            LineString([points[0], points[1]]),
+            LineString([points[1], points[2]]),
+            LineString([points[1], points[3]]),
+        ],
+    )
+    net = network.add_topology(snkit.Network(nodes, edges))
+    merged = network.merge_edges(net)
+    assert merged.edges.id.to_list() == ["e1", "e2", "e3"]
+    assert merged.nodes.id.to_list() == list("abcd")
+    assert merged.nodes.degree.to_list() == [1, 3, 1, 1]
+
+
+def test_merge_edges_keeps_by_groups_apart_and_drops_only_merged_nodes():
+    points = [Point(x, 0) for x in range(5)]
+    nodes = GeoDataFrame({"id": list("abcde")}, geometry=points)
+    edges = GeoDataFrame(
+        {"id": ["e1", "e2", "e3", "e4"], "kind": ["road", "road", "track", "track"]},
+        geometry=[LineString(points[i : i + 2]) for i in range(4)],
+    )
+    net = network.add_topology(snkit.Network(nodes, edges))
+    merged = network.merge_edges(net, by=["kind"])
+    assert merged.edges.id.to_list() == ["e1", "e3"]
+    assert merged.edges.kind.to_list() == ["road", "track"]
+    assert merged.edges[["from_id", "to_id"]].values.tolist() == [["a", "c"], ["c", "e"]]
+    assert merged.nodes.id.to_list() == ["a", "c", "e"]
+    assert "degree" not in net.nodes.columns
+
+
+def test_add_topology_and_endpoints_on_empty_network():
+    empty = snkit.Network()
+    assert network.add_topology(network.add_ids(empty)).edges.columns.to_list() == [
+        "geometry",
+        "id",
+        "from_id",
+        "to_id",
+    ]
+    assert len(network.add_endpoints(empty).nodes) == 0
+    assert len(network.split_edges_at_nodes(empty).edges) == 0
+    assert len(network.split_edges_at_intersections(empty).edges) == 0

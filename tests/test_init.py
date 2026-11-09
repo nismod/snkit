@@ -320,18 +320,17 @@ def split_heterogeneous_intersection():
     f = Point((4, 1))
     x = Point((1, 1))
     y = Point((2, 1))
-    # note: this is order sensitive although it shouldn't matter
-    nodes = GeoDataFrame(geometry=[a, b, c, d, e, f, y, x])
+    # note: new nodes are in order along the first edge
+    nodes = GeoDataFrame(geometry=[a, b, c, d, e, f, x, y])
     ax = LineString([a, x])
-    xb = LineString([x, b])
-    bc = LineString([b, c])
-    cy = LineString([c, y])
+    # the edge is split only where edges meet, not at its corners b and c
+    xy_via_bc = LineString([x, b, c, y])
     yd = LineString([y, d])
     ex = LineString([e, x])
     xy = LineString([x, y])
     df = LineString([d, f])
     # note that there are two edges 'yd'
-    edges = GeoDataFrame(geometry=[ax, xb, bc, cy, yd, ex, xy, yd, df])
+    edges = GeoDataFrame(geometry=[ax, xy_via_bc, yd, ex, xy, yd, df])
     return snkit.Network(edges=edges, nodes=nodes)
 
 
