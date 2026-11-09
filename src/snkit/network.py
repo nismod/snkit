@@ -352,7 +352,7 @@ def split_edges_at_intersections(network: Network, tolerance: Optional[Number] =
     from snkit.match import crossing_events
 
     lines = Lines(_geoms(edges))
-    events = crossing_events(lines, end_to_end=True)
+    events = crossing_events(lines)
     xy = events[["x", "y"]].to_numpy()
     cut_edge, cut_measure, cut_xy, cut_seg = [], [], [], []
     for side in "ab":

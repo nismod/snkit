@@ -1,8 +1,15 @@
 """Array kernel for spatial network operations.
 
 Everything here takes and returns plain numpy arrays. There are no tables, no
-attributes and no geometry objects, so that this module is the part to port to
-another language.
+attributes and no geometry objects.
+
+This module is the reference implementation. The same functions are
+implemented in Rust in the ``kernel`` directory of the repository, as the
+package ``snkit-kernel``. If that package is installed, the functions listed in
+``NATIVE`` are taken from it: they give the same results, faster and in less
+memory. Set the environment variable ``SNKIT_KERNEL=python`` to use this module
+regardless, or ``SNKIT_KERNEL=native`` to fail if the compiled kernel is
+missing. ``snkit._kernel.BACKEND`` says which is in use.
 
 A network is represented by:
 
@@ -15,6 +22,7 @@ A network is represented by:
 
 from __future__ import annotations
 
+import os
 from typing import Any, List, Tuple
 
 import numpy as np
@@ -199,8 +207,8 @@ def segment_events(
     proper = (np.sign(o1) * np.sign(o2) < 0) & (np.sign(o3) * np.sign(o4) < 0)
 
     idx = np.flatnonzero(proper)
-    t = o1[idx] / (o1[idx] - o2[idx])
-    u = o3[idx] / (o3[idx] - o4[idx])
+    t = np.clip(o1[idx] / (o1[idx] - o2[idx]), 0, 1)
+    u = np.clip(o3[idx] / (o3[idx] - o4[idx]), 0, 1)
     found: List[Tuple[Any, Any, Any, Any]] = [(idx, t, u, p[idx] + t[:, None] * r[idx])]
 
     def on_segment(point: FloatArray, a: FloatArray, b: FloatArray, orient: FloatArray) -> BoolArray:
@@ -238,3 +246,147 @@ def segment_events(
         np.concatenate([f[2] for f in found]),
         np.concatenate([f[3] for f in found]),
     )
+
+
+def segment_crossings(
+    coords: FloatArray, offsets: IntArray, end_to_end: bool = False
+) -> Tuple[IntArray, IntArray, FloatArray, FloatArray, FloatArray]:
+    """Find every place where two segments of the given lines meet.
+
+    Returns, for each meeting: the two segments (each named by the vertex
+    position where it starts, the lower first), the fraction along each, and
+    the coordinate. See :func:`segment_events` for what counts as a meeting.
+    Segments of zero length are ignored.
+
+    Two kinds of meeting are left out, because on a clean network they are
+    nearly all there is to find: the vertex shared by two successive segments
+    of one line, and, unless ``end_to_end`` is set, places where two lines
+    meet at an end of each.
+
+    Each pair is put into a fixed form (each segment running from its lesser
+    end, the lesser segment first) before the meeting is computed, so that the
+    coordinate found does not depend on the order of the lines or the
+    direction they run.
+
+    This reference implementation borrows its spatial index from Shapely.
+    """
+    import shapely
+
+    none = np.zeros(0, dtype=np.int64)
+    is_start = np.ones(len(coords), dtype=bool)
+    if len(offsets) > 1:
+        is_start[offsets[1:] - 1] = False
+    start = np.flatnonzero(is_start & (segment_lengths(coords, offsets) > 0))
+    if len(start) == 0:
+        return none, none, np.zeros(0), np.zeros(0), np.zeros((0, 2))
+    p, p2 = coords[start], coords[start + 1]
+    segments = shapely.linestrings(np.stack([p, p2], axis=1))
+    i, j = shapely.STRtree(segments).query(segments, predicate="intersects")
+    once = i < j
+    i, j = i[once], j[once]
+    flip = (p2[:, 0] < p[:, 0]) | ((p2[:, 0] == p[:, 0]) & (p2[:, 1] < p[:, 1]))
+    low = np.where(flip[:, None], p2, p)
+    high = np.where(flip[:, None], p, p2)
+    key = np.concatenate([low, high], axis=1)
+    swap = np.zeros(len(i), dtype=bool)
+    undecided = np.ones(len(i), dtype=bool)
+    for column in range(4):
+        swap |= undecided & (key[i, column] > key[j, column])
+        undecided &= key[i, column] == key[j, column]
+    first, second = np.where(swap, j, i), np.where(swap, i, j)
+    pair, t, u, xy = segment_events(low[first], high[first], low[second], high[second])
+    t = np.where(flip[first[pair]], 1 - t, t)
+    u = np.where(flip[second[pair]], 1 - u, u)
+    t, u = np.where(swap[pair], u, t), np.where(swap[pair], t, u)
+    seg_a, seg_b = start[i[pair]], start[j[pair]]
+
+    # where both lines have a vertex: drop the shared vertex of successive
+    # segments of one line and, unless wanted, lines meeting end to end
+    line = vertex_edge(offsets)
+    is_end = np.zeros(len(coords), dtype=bool)
+    is_end[offsets[:-1]] = True
+    is_end[offsets[1:] - 1] = True
+    va, vb = seg_a + (t == 1), seg_b + (u == 1)
+    both = ((t == 0) | (t == 1)) & ((u == 0) | (u == 1))
+    drop = both & (va == vb) & (line[va] == line[vb])
+    if not end_to_end:
+        drop |= both & is_end[va] & is_end[vb]
+    keep = ~drop
+    seg_a, seg_b, t, u, xy = seg_a[keep], seg_b[keep], t[keep], u[keep], xy[keep]
+    order = np.lexsort((u, t, seg_b, seg_a))
+    seg_a, seg_b, t, u, xy = seg_a[order], seg_b[order], t[order], u[order], xy[order]
+    # two segments touching vertex to vertex are found from both sides
+    first = np.ones(len(seg_a), dtype=bool)
+    first[1:] = (seg_a[1:] != seg_a[:-1]) | (seg_b[1:] != seg_b[:-1]) | (t[1:] != t[:-1]) | (u[1:] != u[:-1])
+    return seg_a[first], seg_b[first], t[first], u[first], xy[first]
+
+
+def point_pairs(xy: FloatArray, tolerance: float) -> Tuple[IntArray, IntArray]:
+    """Find all pairs of points no further apart than ``tolerance``.
+
+    Each pair is returned once, lower position first, sorted.
+
+    This reference implementation borrows its spatial index from Shapely.
+    """
+    import shapely
+
+    if len(xy) < 2:
+        return np.zeros(0, dtype=np.int64), np.zeros(0, dtype=np.int64)
+    points = shapely.points(xy)
+    a, b = shapely.STRtree(points).query(points, predicate="dwithin", distance=tolerance)
+    once = a < b
+    a, b = a[once], b[once]
+    order = np.lexsort((b, a))
+    return a[order].astype(np.int64), b[order].astype(np.int64)
+
+
+# ---------------------------------------------------------------------------
+# Choice of implementation
+
+NATIVE = ("components", "split", "segment_crossings", "point_pairs")
+PYTHON = {name: globals()[name] for name in NATIVE}
+BACKEND = "python"
+
+
+def _contiguous(array: Any, dtype: Any) -> Any:
+    return np.ascontiguousarray(array, dtype=dtype)
+
+
+def use_backend(name: str) -> None:
+    """Choose the implementation of the kernel: ``"python"`` or ``"native"``"""
+    global BACKEND
+    if name == "python":
+        globals().update(PYTHON)
+        BACKEND = "python"
+        return
+    if name != "native":
+        raise ValueError("backend must be 'python' or 'native'")
+    import snkit_kernel as native
+
+    def components(n: int, a: IntArray, b: IntArray) -> IntArray:
+        return native.components(n, _contiguous(a, np.int64), _contiguous(b, np.int64))  # type: ignore[no-any-return]
+
+    def split(*arrays: Any) -> Any:
+        kinds = (float, np.int64, np.int64, np.int64, np.int64, np.int64, float, np.int64)
+        return native.split(*(_contiguous(a, kind) for a, kind in zip(arrays, kinds)))
+
+    def segment_crossings(coords: FloatArray, offsets: IntArray, end_to_end: bool = False) -> Any:
+        return native.segment_crossings(_contiguous(coords, float), _contiguous(offsets, np.int64), end_to_end)
+
+    def point_pairs(xy: FloatArray, tolerance: float) -> Any:
+        return native.point_pairs(_contiguous(xy, float).reshape(-1, 2), float(tolerance))
+
+    for function in (components, split, segment_crossings, point_pairs):
+        function.__doc__ = PYTHON[function.__name__].__doc__
+        globals()[function.__name__] = function
+    BACKEND = "native"
+
+
+_wanted = os.environ.get("SNKIT_KERNEL", "")
+if _wanted == "native":
+    use_backend("native")
+elif _wanted != "python":
+    try:
+        use_backend("native")
+    except ImportError:
+        pass

@@ -176,6 +176,11 @@ network = snkit.link_nodes_to_edges(network)          # connect the depot to the
 | tidy | `merge_edges`, `simplify_edges`, `drop_duplicate_edges`, `label_components` |
 | work with several networks | `combine`, `stitch`, `union`, `intersection`, `difference` |
 
+These functions run on a kernel that works on plain arrays. It comes in NumPy, and
+optionally in Rust: build and install [`kernel/`](kernel/README.md) and `snkit` will use it
+for the heaviest steps, several times faster and in less memory. The older functions in
+`snkit.network` are built on the same kernel.
+
 Each function's documentation has a small example. The
 [design document](docs/source/design.md) explains the ideas, with a worked example of every
 operation.

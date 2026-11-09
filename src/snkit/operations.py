@@ -225,8 +225,7 @@ def _cluster(xy: K.FloatArray, tolerance: float) -> Tuple[K.FloatArray, K.IntArr
     """Group coordinates within tolerance: the first of each group, and each one's group"""
     if tolerance <= 0 or len(xy) < 2:
         return _distinct(xy)
-    points = shapely.points(xy)
-    a, b = shapely.STRtree(points).query(points, predicate="dwithin", distance=tolerance)
+    a, b = K.point_pairs(xy, tolerance)
     group, is_first = K.group_index(K.components(len(xy), a, b))
     return xy[is_first], group
 

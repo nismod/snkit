@@ -1,0 +1,39 @@
+name: kernel
+# Build the compiled kernel and run the tests against it
+
+on:
+  push:
+    paths:
+      - "kernel/**"
+      - "src/**"
+      - "tests/**"
+      - ".github/workflows/kernel.yml"
+
+jobs:
+  kernel:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Test the kernel on its own
+        working-directory: kernel
+        run: cargo test --release
+
+      - name: Build and install the kernel for Python
+        run: |
+          python -m pip install --upgrade pip maturin
+          maturin build --release --manifest-path kernel/Cargo.toml --out wheels
+          pip install wheels/snkit_kernel-*.whl
+
+      - name: Install snkit
+        run: pip install .[dev,networkx,igraph]
+
+      - name: Test snkit on the compiled kernel
+        run: SNKIT_KERNEL=native pytest --cov=snkit --cov-report=term-missing tests

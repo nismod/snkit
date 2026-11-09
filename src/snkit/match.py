@@ -46,16 +46,9 @@ def apply_condition(
 
 def node_pairs(arrays: Arrays, tolerance: float) -> pd.DataFrame:
     """Pairs of node positions within tolerance, each pair once"""
-    if arrays.n == 0:
-        a = b = np.zeros(0, dtype=np.int64)
-    else:
-        tree = shapely.STRtree(arrays.points)
-        a, b = tree.query(arrays.points, predicate="dwithin", distance=tolerance)
-        once = a < b
-        a, b = a[once], b[once]
+    a, b = K.point_pairs(arrays.xy, tolerance)
     distance = np.hypot(*(arrays.xy[a] - arrays.xy[b]).T)
-    order = np.lexsort((b, a))
-    return pd.DataFrame({"a": a[order], "b": b[order], "distance": distance[order]})
+    return pd.DataFrame({"a": a, "b": b, "distance": distance})
 
 
 def match_nodes(network: Network, tolerance: float, condition: Condition = None) -> pd.DataFrame:
@@ -221,40 +214,14 @@ def crossing_events(arrays: Lines, end_to_end: bool = False) -> pd.DataFrame:
     empty = pd.DataFrame({c: np.zeros(0, dtype=float) for c in columns + ["x", "y"]})
     if arrays.m == 0:
         return empty
-    coords, offsets = arrays.coords, arrays.offsets
-    is_start = np.ones(len(coords), dtype=bool)
-    is_start[offsets[1:] - 1] = False
-    start = np.flatnonzero(is_start & (arrays.seglen > 0))
-    if len(start) == 0:
+    offsets = arrays.offsets
+    seg_a, seg_b, t, u, xy = K.segment_crossings(arrays.coords, offsets, end_to_end)
+    if len(seg_a) == 0:
         return empty
-    p, p2 = coords[start], coords[start + 1]
-    segments = shapely.linestrings(np.stack([p, p2], axis=1))
-    tree = shapely.STRtree(segments)
-    i, j = tree.query(segments, predicate="intersects")
-    once = i < j
-    i, j = i[once], j[once]
-    # compute each meeting from the pair in a fixed form (each segment running
-    # from its lesser end, the lesser segment first) so that the coordinate
-    # found does not depend on the order of edges or the direction they run
-    flip = (p2[:, 0] < p[:, 0]) | ((p2[:, 0] == p[:, 0]) & (p2[:, 1] < p[:, 1]))
-    low = np.where(flip[:, None], p2, p)
-    high = np.where(flip[:, None], p, p2)
-    key = np.concatenate([low, high], axis=1)
-    swap = np.zeros(len(i), dtype=bool)
-    undecided = np.ones(len(i), dtype=bool)
-    for column in range(4):
-        swap |= undecided & (key[i, column] > key[j, column])
-        undecided &= key[i, column] == key[j, column]
-    first, second = np.where(swap, j, i), np.where(swap, i, j)
-    pair, t, u, xy = K.segment_events(low[first], high[first], low[second], high[second])
-    t = np.where(flip[first[pair]], 1 - t, t)
-    u = np.where(flip[second[pair]], 1 - u, u)
-    t, u = np.where(swap[pair], u, t), np.where(swap[pair], t, u)
-    i, j = i[pair], j[pair]
 
     owner = K.vertex_edge(offsets)
     data: Dict[str, Any] = {}
-    for side, seg, frac in (("a", start[i], t), ("b", start[j], u)):
+    for side, seg, frac in (("a", seg_a, t), ("b", seg_b, u)):
         edge = owner[seg]
         # a place at the far end of a segment is the start of the next
         vertex = seg + (frac == 1)

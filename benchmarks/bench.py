@@ -7,6 +7,7 @@ grid, so that every junction must be found as a crossing, plus scattered
 points to connect.
 """
 
+import resource
 import sys
 import time
 
@@ -14,6 +15,7 @@ import numpy as np
 import shapely
 
 import snkit
+import snkit._kernel
 
 
 def grid_lines(target_edges, rng):
@@ -49,6 +51,8 @@ def main(target_edges):
     network = timed("label_components", snkit.label_components, network)
     timed("validate", snkit.validate, network)
     print(f"  {len(network.nodes):,} nodes, {len(network.edges):,} edges")
+    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
+    print(f"kernel: {snkit._kernel.BACKEND}; peak memory {peak:,.0f} MiB")
 
 
 if __name__ == "__main__":

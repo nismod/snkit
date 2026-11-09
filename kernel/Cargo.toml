@@ -1,0 +1,26 @@
+[package]
+name = "snkit-kernel"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Array kernel for spatial network operations"
+repository = "https://github.com/nismod/snkit"
+
+[lib]
+name = "snkit_kernel"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+rayon = "1"
+robust = "1"
+pyo3 = { version = "0.23", features = ["extension-module", "abi3-py39"], optional = true }
+numpy = { version = "0.23", optional = true }
+
+[features]
+default = []
+python = ["dep:pyo3", "dep:numpy"]
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1

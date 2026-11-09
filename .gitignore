@@ -28,3 +28,6 @@ src/snkit/_version.py
 *.shx
 *.cpg
 __init__.py
+
+# compiled kernel build output
+kernel/target

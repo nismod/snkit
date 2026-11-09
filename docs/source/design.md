@@ -1,7 +1,7 @@
 # Design: a spatial network operations API
 
-**Status: implemented as a Python reference implementation**, alongside the existing
-`snkit.network` functions, which are unchanged. This document sets out the concepts, the
+**Status: implemented**, in Python with an optional compiled kernel in Rust. The existing
+`snkit.network` functions are rebuilt on the same kernel. This document sets out the concepts, the
 Python API with small examples, and the plan for testing, performance and implementation in
 other languages. It builds on what `snkit` already did and on the open issues it references
 (`#NN`). Section 11 lists what is not yet done.
@@ -491,10 +491,9 @@ but it is the slowest part of the library and its failure modes are silent.
 5. **Decide with robust tests, construct with ordinary arithmetic.** "Do these segments
    cross?" should use exact orientation predicates, so the decision is consistent whichever
    way round it is asked. The crossing coordinate itself is rounded, which is harmless given
-   (2). The Python reference implementation uses plain floating-point orientation tests,
-   on each pair of segments put into a fixed order and direction first, so results do not
-   depend on the order of rows or the direction of edges; exact predicates belong in the
-   native kernel.
+   (2). The Rust kernel uses exact predicates. The Python reference kernel uses plain
+   floating-point tests. Both put each pair of segments into a fixed order and direction
+   first, so results do not depend on the order of rows or the direction of edges.
 
 ### Known hard cases and the stance on each
 
@@ -530,19 +529,16 @@ but it is the slowest part of the library and its failure modes are silent.
 
 ## 8. Performance and other languages
 
-### Why the current code is slow
+### Why the old code was slow
 
-- Python loops over rows, with a spatial query per row (`add_topology`,
-  `link_nodes_to_nearest_edge`, `split_edges_at_intersections`).
+- Python loops over rows, with a spatial query per row.
 - A new GeoDataFrame built per edge when splitting.
 - Topology rebuilt from geometry after each step, by nearest-node search.
-- Whole-table scans per node: `node_connectivity_degree` and the chain walk in
-  `merge_edges` are quadratic.
-- `nearest_vertex_idx_on_line` measures the distance to every vertex for every split point.
+- Whole-table scans per node: counting degree and walking chains were quadratic.
 
-### The plan
+### A kernel over flat arrays
 
-**A kernel over flat arrays.** The kernel sees only:
+The kernel sees only:
 
 - node coordinates: one `float64` array, two columns;
 - edge ends: two integer arrays indexing into nodes;
@@ -558,55 +554,162 @@ table. This one decision gives:
   DuckDB, JavaScript);
 - a narrow interface to reimplement: arrays in, arrays out, no object model.
 
-**Targets.** Every operation runs in `O((n + k) log n)` for `n` features and `k` matches.
-No Python-level loop over features. All cuts on an edge made in one pass. Graph steps
-(degree, components, chains) use integer arrays, not table scans. A working target: clean a
-1-million-edge network in tens of seconds on a laptop.
+There are two implementations of the kernel, tested against each other:
 
-**Where the reference implementation stands.** `python benchmarks/bench.py 1000000`, on a
-grid that becomes one million edges once split at its 600 thousand crossings (one run, one
-core, seconds):
+- `snkit/_kernel.py`, in NumPy: the reference, always available. It borrows its spatial
+  index from Shapely.
+- `kernel/`, in Rust, published as the Python package `snkit-kernel`: its own spatial
+  index, exact orientation predicates, parallel search. If it is installed, `snkit` uses
+  it; `SNKIT_KERNEL=python` or `=native` forces the choice.
 
-| Operation | 100 thousand edges | 1 million edges |
+The Rust kernel covers `components`, `split`, `segment_crossings` and `point_pairs`. The
+rest of the reference kernel is cheap arithmetic that NumPy already does in bulk.
+
+Both give the same network, to the last bit, on the tests: where edges cross is *decided*
+with exact predicates in Rust and plain floating point in NumPy, but the crossing
+coordinate is *computed* by the same arithmetic in both, written out in a fixed order.
+They can differ only where the NumPy version misjudges a near-degenerate case.
+
+### Measurements
+
+All on one machine with 4 cores and 15 GB, one run each, in seconds.
+
+**The functions of `snkit.network`, before and after being rebuilt on the kernel**
+(`benchmarks/bench_legacy.py`, 10 thousand edges, Python kernel):
+
+| Function | Before | After |
 | --- | --- | --- |
-| `split_edges_at_crossings` | 1.2 | 12 |
-| `link_nodes_to_edges` (10% as many points) | 0.3 | 3.9 |
-| `merge_nodes` | 0.2 | 2.1 |
-| `split_edges_at_nodes` | 0.5 | 5.5 |
-| `merge_edges` | 0.1 | 1.1 |
-| `simplify_edges` | 2.1 | 26 |
-| `label_components` | 0.2 | 4.6 |
+| `split_edges_at_nodes` | 30.8 | 0.03 |
+| `link_nodes_to_nearest_edge` | 28.8 | 0.10 |
+| `merge_edges` | 19.1 | 0.06 |
+| `split_edges_at_intersections` | 5.6 | 0.04 |
+| `add_topology` | 2.1 | 0.05 |
+| `add_endpoints` | 0.20 | 0.03 |
 
-The one remaining Python-level loop is the walk along each chain in `merge_edges`.
-`simplify_edges` is slow because it looks for crossings before and after to guard against
-creating new ones.
+The old functions grew faster than linearly, so the gap widens with size: after the rewrite
+the whole sequence takes about 4 s at 100 thousand edges.
 
-**Stages.**
+**The operations of the new API on tables** (`benchmarks/bench.py`, a grid that becomes one
+million edges once split at its 600 thousand crossings):
 
-1. *Reference implementation in Python* (done), on the array kernel, using Shapely 2's bulk
-   functions (`STRtree.query` with `dwithin`, `line_locate_point`, ragged-array
-   conversion) and NumPy. `snkit/_kernel.py` holds the part that sees only arrays.
-2. *Conformance cases and benchmarks* written against it (benchmark script done).
-3. *Native kernel* for whichever operations the benchmarks show need it, behind the same
-   array interface. Recommended: Rust, for its Arrow and spatial-index libraries and for
-   straightforward bindings to Python (PyO3), R (extendr) and the browser (WebAssembly).
-   The alternative from `#77`, building on the GEOS C API, is attractive for noding
-   (`GEOSNode`), but GEOS returns noded linework without saying which input each piece came
-   from, and lineage is the thing this design depends on.
-4. *Other language front ends* are then thin: table in, kernel call, `take`, table out -
-   validated by the conformance cases.
+| Operation | Python kernel | Rust kernel |
+| --- | --- | --- |
+| `split_edges_at_crossings` | 12.1 | 1.9 |
+| `link_nodes_to_edges` (10% as many points) | 4.0 | 4.0 |
+| `merge_nodes` | 2.4 | 1.5 |
+| `split_edges_at_nodes` | 5.5 | 5.5 |
+| `merge_edges` | 1.1 | 1.1 |
+| `simplify_edges` | 25.6 | 3.0 |
+| `label_components` | 4.7 | 0.6 |
+| peak memory | 3.6 GB | 1.5 GB |
 
-**Parallelism** comes after the above, by partitioning space into tiles with a
-tolerance-wide overlap, replacing the current `SNKIT_PROCESSES` chunking.
+The operations that did not speed up spend their time matching nodes to edges, which still
+goes through Shapely, and in building tables.
+
+**The Rust kernel on arrays alone** (`benchmarks/bench_kernel.py`: random three-segment
+lines, find crossings, cut, label components, find close nodes):
+
+| Lines in | Edges out | Crossings found in | Whole run | Peak memory |
+| --- | --- | --- | --- | --- |
+| 1 million | 1.7 million | 1.0 | 2.4 | 0.5 GB |
+| 10 million | 17 million | 11.5 | 26 | 3.3 GB |
+| 30 million | 52 million | 36 | 82 | 9.4 GB |
+
+That is about 190 bytes per edge at the peak, of which the input and output geometry are
+about 80, and time that grows in proportion to size.
+
+### Scaling to tens and hundreds of millions
+
+The measurements say where the limits are.
+
+1. **The table layer is the first limit, not the kernel.** A million edges held as a
+   GeoDataFrame of Shapely objects cost 1.5 GB at the peak of an operation; the same in
+   arrays cost a fifth of that. Tens of millions of edges fit in the memory of a laptop
+   as arrays and do not as tables. So the first step is a path that keeps geometry in
+   arrays from file to file - reading GeoParquet or GeoArrow straight into the kernel's
+   layout, carrying attributes as Arrow tables moved by `take`, and never making a
+   geometry object per feature. The kernel already works this way; the Python layer
+   around it needs an array-backed `Network` alongside the GeoDataFrame one.
+
+2. **Work is done in tiles, so the index never covers the whole network.** Finding
+   crossings divides the area into tiles of about 16 thousand segments. A segment belongs
+   to every tile it passes through; a crossing is reported by the tile its coordinate
+   falls in, so it is found exactly once. Each tile builds a small index, searches it and
+   throws it away, and tiles run in parallel. Whole-network memory for the search is 8
+   bytes per segment. This made the search faster as well as smaller. The same division
+   serves the other matchers, with tiles overlapping by the tolerance.
+
+3. **The same tiles are the unit for working out of core.** When the network itself does
+   not fit, it is stored tile by tile (GeoParquet partitioned by tile, or memory-mapped
+   Arrow), and each operation becomes: for each tile, load it with a margin as wide as the
+   tolerance, match, edit, write. Matching and splitting are local, so this is exact, not
+   approximate. Memory is then set by the tile size and the number of threads, and is the
+   user's to choose. Two things need a pass over the whole: components, which is a
+   union-find over node positions at 4 bytes per node (400 MB for 100 million nodes), and
+   assigning ids, which is a running count. `stitch` is the operation that joins tiles
+   back together.
+
+4. **Smaller numbers.** The interface uses 64-bit integers throughout today. Node and edge
+   positions fit in 32 bits up to 4 billion, which halves the size of topology and of
+   every table of matches. Storing coordinates on a fixed grid as 32-bit integers
+   (section 6) would halve geometry too and make exact predicates cheap; that is a larger
+   decision because it changes what coordinates mean.
+
+5. **Even tiles assume even data.** A grid of equal tiles suits a network spread evenly.
+   Real networks are dense in cities, so the tiling should become adaptive (split a tile
+   that is too full) before the out-of-core path is relied on.
+
+By these numbers, 100 million edges need about 20 GB and about three minutes as arrays in memory
+on one machine, or a memory budget of the user's choosing once tiles are read from disk.
+Neither has been run at that size; the largest run here is 52 million edges.
+
+### Stages
+
+1. *Reference implementation in Python* (done).
+2. *Existing functions rebuilt on it* (done; section 9).
+3. *Rust kernel behind the same interface* (done for the four functions above, with
+   bindings for Python).
+4. *Conformance cases and benchmarks*: the benchmark scripts exist; conformance cases as
+   data files are still to write. For now the two kernels are tested against each other
+   on generated inputs (`tests/test_kernel.py`).
+5. *Node-to-edge and edge-to-edge matching in the kernel*, which removes the remaining
+   use of Shapely's index and of per-feature geometry objects in the hot paths.
+6. *Array-backed networks and tiled, out-of-core operation*, as above.
+7. *Other language front ends* - R through extendr, the browser through WebAssembly -
+   which are thin: table in, kernel call, `take`, table out.
 
 ## 9. Migration from the current API
 
 The `Network` class, `read_file`/`to_file`, and the graph converters stay. The new API is
-exported from the top level (`snkit.merge_edges`), and the existing functions in
-`snkit.network` are untouched for now. A network made with them can be brought across with
-`snkit.from_topology(network.nodes, network.edges, tolerance=...)`. The intention is for
-the existing functions to become thin wrappers, with deprecation notices where the name or
-behaviour changes:
+exported from the top level (`snkit.merge_edges`). The functions of `snkit.network` keep
+their names, arguments and the shape of their results - no ids are added, tables need no
+topology - but are now built on the kernel, and are tens to hundreds of times faster.
+
+A network made with them can be brought across to the new API with
+`snkit.from_topology(network.nodes, network.edges, tolerance=...)`.
+
+**What changed in the old functions.** Compared on generated networks before and after,
+`add_endpoints`, `add_topology`, `snap_nodes`, `round_geometries`, `merge_edges` and
+`split_edges_at_intersections` (on straight lines) give the same results. The differences
+are all places where the old code was wrong:
+
+- `split_edges_at_nodes`, and the linking functions that use it, put a node's vertex into
+  the wrong segment of a line with corners when the nearest corner was not on the segment
+  the node lay on. The line changed shape and length. With several nodes on one edge at a
+  larger tolerance, they could be ordered wrongly along it. Both are fixed: the total
+  length of edges is now unchanged by splitting.
+- `split_edges_at_intersections` cut every edge at every corner, and put a node there. It
+  now cuts only where edges meet. (It still adds a node at each end of every edge.) One
+  existing test encoded the old behaviour and was changed. Nodes it adds now carry the CRS
+  and are not duplicated when the nodes table has other columns.
+- Both functions also cut an edge that crossed itself at the crossing, as a side effect,
+  if the edge was being split anyway. `split_edges_at_nodes` no longer does.
+- `merge_edges` raised an error when there was nothing to merge, kept nodes that no edge
+  used, added an `index` column, and changed its input. A merged edge now takes the place
+  of its first member, where before merged edges moved to the end.
+- `SNKIT_PROGRESS` and `SNKIT_PROCESSES` no longer do anything.
+
+How the old names map to the new:
 
 | Current | Proposed |
 | --- | --- |
@@ -649,12 +752,14 @@ validation and the benchmark script.
 Not yet done, in rough order of value:
 
 - conformance cases as language-neutral data files (section 7);
-- the existing `snkit.network` functions as wrappers over the new ones (section 9);
-- exact orientation predicates and snap-rounding to a coordinate grid (section 6);
+- node-to-edge and edge-to-edge matching in the Rust kernel (section 8);
+- array-backed networks and tiled, out-of-core operation (section 8);
+- snap-rounding to a coordinate grid (section 6); exact orientation predicates are in the
+  Rust kernel but not the Python one;
 - Z coordinates carried through operations;
 - parent intervals in lineage (which stretch of the parent each piece of an edge covers);
 - joining `b`'s attributes onto shared edges in `union`;
-- the native kernel and other language front ends (section 8).
+- front ends for other languages (section 8).
 
 Known limits of the reference implementation:
 
