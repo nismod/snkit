@@ -381,7 +381,7 @@ def split_edges_at_intersections(network: Network, tolerance: Optional[Number] =
 
     # combine the original nodes with nodes where edges meet and at the ends of
     # every edge, keeping the original where there is already a node at the same place
-    places = np.concatenate([xy, _line_ends(lines.lines)])
+    places = np.concatenate([xy, _line_ends(lines.lines.to_shapely())])
     new_nodes = matching_gdf_from_geoms(network.nodes, list(shapely.points(places)))
     nodes = concat_dedup([network.nodes, new_nodes])
     return Network(nodes=nodes, edges=split)
@@ -508,7 +508,7 @@ def _cut_edges(
         np.zeros(len(cut_edge), dtype=np.int64),
     )
     split = edges.iloc[parent].reset_index(drop=True)
-    split[geometry_column_name(edges)] = geopandas.GeoSeries(from_ragged(coords, offsets), crs=edges.crs)
+    split[geometry_column_name(edges)] = geopandas.GeoSeries(from_ragged(coords, offsets).to_shapely(), crs=edges.crs)
     return split
 
 

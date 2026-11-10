@@ -270,7 +270,7 @@ def edge_overlaps(arrays: Arrays, tolerance: float, min_length: float, directed:
     empty = pd.DataFrame({c: np.zeros(0, dtype=float) for c in columns})
     if arrays.m < 2:
         return empty
-    lines = arrays.lines
+    lines = arrays.lines.to_shapely()
     tree = shapely.STRtree(lines)
     i, j = tree.query(lines, predicate="dwithin", distance=tolerance)
     once = i < j

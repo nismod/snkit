@@ -5,6 +5,7 @@ from importlib.metadata import version, PackageNotFoundError
 # Define what is accessible directly on snkit, when a client writes::
 #   from snkit import Network
 from snkit.network import Network
+from snkit.arrays import ArrayNetwork, to_arrays
 from snkit.core import (
     Lineage,
     from_edges,
@@ -31,6 +32,7 @@ from snkit.operations import (
     split_edges_at_nodes,
 )
 from snkit.multi import combine, difference, intersection, stitch, union
+from snkit.io import read_network
 
 __author__ = "Tom Russell"
 __copyright__ = "Tom Russell"
@@ -46,6 +48,9 @@ except (PackageNotFoundError, ValueError):
 # Define what should be imported as * when a client writes::
 #   from snkit import *
 __all__ = [
+    "ArrayNetwork",
+    "read_network",
+    "to_arrays",
     "Lineage",
     "Network",
     "combine",

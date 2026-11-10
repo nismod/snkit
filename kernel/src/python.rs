@@ -1,8 +1,15 @@
 //! Python bindings: numpy arrays in, numpy arrays out, with the interpreter
 //! lock released while working. Coordinates are arrays of shape (n, 2).
 
+use arrow::ffi_stream::{ArrowArrayStreamReader, FFI_ArrowArrayStream};
+use arrow::record_batch::RecordBatchReader;
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray1, PyReadonlyArray2};
+use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
+use pyo3::types::PyCapsule;
+
+use crate::geoarrow::Want;
+use crate::tiles::Tiling;
 
 type Int<'py> = PyReadonlyArray1<'py, i64>;
 type Float<'py> = PyReadonlyArray1<'py, f64>;
@@ -247,6 +254,111 @@ fn nearest_points<'py>(
         .into_pyarray(py))
 }
 
+/// Take over the Arrow stream that a Python object offers.
+fn stream(source: &Bound<'_, PyAny>) -> PyResult<ArrowArrayStreamReader> {
+    let capsule = source
+        .call_method0("__arrow_c_stream__")
+        .map_err(|_| PyTypeError::new_err("expected Arrow data: an object with an __arrow_c_stream__ method"))?;
+    let capsule = capsule.downcast::<PyCapsule>()?;
+    let reader = unsafe { ArrowArrayStreamReader::from_raw(capsule.pointer() as *mut FFI_ArrowArrayStream) };
+    reader.map_err(|e| PyValueError::new_err(e.to_string()))
+}
+
+fn wanted(kind: &str) -> PyResult<Want> {
+    match kind {
+        "lines" => Ok(Want::Lines),
+        "points" => Ok(Want::Points),
+        "any" => Ok(Want::Any),
+        _ => Err(PyValueError::new_err("kind must be 'lines', 'points' or 'any'")),
+    }
+}
+
+/// Read the geometry column of a stream of Arrow record batches.
+///
+/// Returns the coordinates of every part, where each part starts, the row
+/// each part came from, the rows with nothing usable, and the number of rows.
+#[pyfunction]
+#[pyo3(signature = (source, kind, column=None))]
+#[allow(clippy::type_complexity)]
+fn read_geometry<'py>(
+    py: Python<'py>,
+    source: &Bound<'py, PyAny>,
+    kind: &str,
+    column: Option<&str>,
+) -> PyResult<(PointsOut<'py>, IntOut<'py>, IntOut<'py>, IntOut<'py>, i64)> {
+    let (reader, want) = (stream(source)?, wanted(kind)?);
+    let schema = reader.schema();
+    let parts = py
+        .allow_threads(|| crate::geoarrow::read_parts(reader, &schema, column, want))
+        .map_err(PyValueError::new_err)?;
+    Ok((
+        points(py, parts.coords)?,
+        parts.offsets.into_pyarray(py),
+        parts.row.into_pyarray(py),
+        parts.invalid.into_pyarray(py),
+        parts.rows,
+    ))
+}
+
+/// The bounding box of each row of a stream of Arrow record batches, as an
+/// array of shape (rows, 4), NaN for a row with no geometry.
+#[pyfunction]
+#[pyo3(signature = (source, column=None))]
+fn geometry_bounds<'py>(
+    py: Python<'py>,
+    source: &Bound<'py, PyAny>,
+    column: Option<&str>,
+) -> PyResult<Bound<'py, PyArray2<f64>>> {
+    let reader = stream(source)?;
+    let schema = reader.schema();
+    let boxes = py
+        .allow_threads(|| {
+            crate::geoarrow::read_parts(reader, &schema, column, Want::Any).map(|p| crate::geoarrow::bounds(&p))
+        })
+        .map_err(PyValueError::new_err)?;
+    let n = boxes.len() / 4;
+    boxes.into_pyarray(py).reshape([n, 4])
+}
+
+/// The tile each point belongs to, in a tiling given as a tree of splits.
+#[pyfunction]
+fn tile_owners<'py>(
+    py: Python<'py>,
+    axis: Int<'py>,
+    split: Float<'py>,
+    low: Int<'py>,
+    high: Int<'py>,
+    xy: Points<'py>,
+) -> PyResult<IntOut<'py>> {
+    let tiling = Tiling {
+        axis: axis.as_slice()?,
+        split: split.as_slice()?,
+        low: low.as_slice()?,
+        high: high.as_slice()?,
+    };
+    Ok(crate::tiles::owners(&tiling, xy.as_slice()?).into_pyarray(py))
+}
+
+/// Every (box, tile) where a box reaches into a tile. Boxes have shape (n, 4).
+#[pyfunction]
+fn tile_reaches<'py>(
+    py: Python<'py>,
+    axis: Int<'py>,
+    split: Float<'py>,
+    low: Int<'py>,
+    high: Int<'py>,
+    boxes: PyReadonlyArray2<'py, f64>,
+) -> PyResult<(IntOut<'py>, IntOut<'py>)> {
+    let tiling = Tiling {
+        axis: axis.as_slice()?,
+        split: split.as_slice()?,
+        low: low.as_slice()?,
+        high: high.as_slice()?,
+    };
+    let (rows, tiles) = crate::tiles::reaches(&tiling, boxes.as_slice()?);
+    Ok((rows.into_pyarray(py), tiles.into_pyarray(py)))
+}
+
 #[pymodule]
 #[pyo3(name = "_native")]
 fn native(module: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -262,5 +374,9 @@ fn native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(points_near_lines, module)?)?;
     module.add_function(wrap_pyfunction!(nearest_lines, module)?)?;
     module.add_function(wrap_pyfunction!(nearest_points, module)?)?;
+    module.add_function(wrap_pyfunction!(read_geometry, module)?)?;
+    module.add_function(wrap_pyfunction!(geometry_bounds, module)?)?;
+    module.add_function(wrap_pyfunction!(tile_owners, module)?)?;
+    module.add_function(wrap_pyfunction!(tile_reaches, module)?)?;
     Ok(())
 }

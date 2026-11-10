@@ -15,11 +15,13 @@
 
 pub mod components;
 pub mod crossings;
+pub mod geoarrow;
 pub mod measures;
 pub mod nearest;
 pub mod points;
 pub mod rtree;
 pub mod split;
+pub mod tiles;
 
 #[cfg(feature = "python")]
 mod python;

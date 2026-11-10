@@ -31,9 +31,9 @@ from snkit.core import (
     check_distance,
     finish,
     from_ragged,
+    to_ragged,
     identity_lineage,
     next_ids,
-    with_geometry,
 )
 from snkit.match import (
     Condition,
@@ -42,6 +42,7 @@ from snkit.match import (
     node_edge_pairs,
     node_pairs,
 )
+from snkit.arrays import PointArray, operation, points_of, with_geometry
 from snkit.network import Network
 
 Result = Union[Network, Tuple[Network, Lineage]]
@@ -57,7 +58,7 @@ def _add_nodes(network: Network, xy: K.FloatArray) -> Network:
         return network
     rows = with_geometry(
         pd.DataFrame({ID: next_ids(network.nodes[ID].to_numpy(), len(xy))}),
-        shapely.points(xy),
+        PointArray(xy),
         network.nodes.crs,
     )
     return Network(append_rows(network.nodes, rows), network.edges)
@@ -67,9 +68,9 @@ def _add_edges(network: Network, arrays: Arrays, src: K.IntArray, dst: K.IntArra
     """Append straight edges between nodes"""
     if len(src) == 0:
         return network
-    xy = shapely.get_coordinates(np.asarray(network.nodes.geometry.values, dtype=object))
+    xy = points_of(network.nodes).xy
     node_ids = network.nodes[ID].to_numpy(dtype="uint64")
-    lines = shapely.linestrings(np.stack([xy[src], xy[dst]], axis=1))
+    lines = from_ragged(np.stack([xy[src], xy[dst]], axis=1).reshape(-1, 2), 2 * np.arange(len(src) + 1))
     rows = with_geometry(
         pd.DataFrame(
             {
@@ -92,7 +93,7 @@ def _move_nodes(network: Network, arrays: Arrays, nodes: K.IntArray, xy: K.Float
     new_xy[nodes] = xy
     coords = K.sync_ends(arrays.coords, arrays.offsets, new_xy, arrays.src, arrays.dst)
     return Network(
-        with_geometry(network.nodes, shapely.points(new_xy), network.nodes.crs),
+        with_geometry(network.nodes, PointArray(new_xy), network.nodes.crs),
         with_geometry(network.edges, from_ragged(coords, arrays.offsets), network.edges.crs),
     )
 
@@ -193,7 +194,7 @@ def _merge_groups(
     node_table = aggregate(network.nodes, group, count, agg)
     node_ids = arrays.node_ids[is_first]
     node_table[ID] = node_ids
-    nodes = with_geometry(node_table, shapely.points(xy), network.nodes.crs)
+    nodes = with_geometry(node_table, PointArray(xy), network.nodes.crs)
 
     src, dst = group[arrays.src], group[arrays.dst]
     if geometry == "move":
@@ -208,8 +209,7 @@ def _merge_groups(
     table = pd.DataFrame(network.edges).reset_index(drop=True)
     table[FROM] = node_ids[src]
     table[TO] = node_ids[dst]
-    edges = with_geometry(table, from_ragged(coords, offsets), network.edges.crs)[keep]
-    edges = with_geometry(edges, np.asarray(edges.geometry.values, dtype=object), edges.crs)
+    edges = with_geometry(table[keep], from_ragged(coords, offsets)[keep], network.edges.crs)
     lineage = Lineage(
         _pairs(node_ids[group], arrays.node_ids),
         _pairs(arrays.edge_ids[keep], arrays.edge_ids[keep]),
@@ -252,6 +252,7 @@ def _filtered(
 # Operations
 
 
+@operation
 def merge_nodes(
     network: Network,
     tolerance: float,
@@ -312,6 +313,7 @@ def merge_nodes(
     return finish(merged, [lineage], return_lineage)
 
 
+@operation
 def link_nodes(
     network: Network,
     tolerance: float,
@@ -369,6 +371,7 @@ def link_nodes(
     return finish(out, [identity_lineage(network)], return_lineage)
 
 
+@operation
 def split_edges(
     network: Network,
     locations: pd.DataFrame,
@@ -432,6 +435,7 @@ def split_edges(
     return finish(out, [lineage], return_lineage)
 
 
+@operation
 def split_edges_at_nodes(
     network: Network,
     tolerance: float = 0,
@@ -503,6 +507,7 @@ def split_edges_at_nodes(
     return finish(network, lineages, return_lineage)
 
 
+@operation
 def link_nodes_to_edges(
     network: Network,
     how: str = "nearest",
@@ -606,6 +611,7 @@ def link_nodes_to_edges(
     return finish(out, [lineage], return_lineage)
 
 
+@operation
 def split_edges_at_crossings(
     network: Network,
     tolerance: float = 0,
@@ -705,6 +711,7 @@ def _crossing_pairs(network: Network) -> Any:
     return np.unique(events["edge_a"].to_numpy(dtype=np.int64) * arrays.m + events["edge_b"].to_numpy(dtype=np.int64))
 
 
+@operation
 def simplify_edges(network: Network, tolerance: float, return_lineage: bool = False) -> Result:
     """Simplify edge geometries, removing vertices that change the line by less
     than ``tolerance``.
@@ -723,7 +730,7 @@ def simplify_edges(network: Network, tolerance: float, return_lineage: bool = Fa
     """
     check_distance(network, tolerance)
     arrays = Arrays(network)
-    original = arrays.lines
+    original = arrays.lines.to_shapely()
     simple = shapely.simplify(original, tolerance, preserve_topology=False)
     degenerate = (shapely.length(simple) == 0) | (shapely.get_num_points(simple) < 2)
     simple = np.where(degenerate, original, simple)
@@ -731,7 +738,7 @@ def simplify_edges(network: Network, tolerance: float, return_lineage: bool = Fa
     if changed.any():
         before = _crossing_pairs(network)
         while True:
-            candidate = Network(network.nodes, with_geometry(network.edges, simple, network.edges.crs))
+            candidate = Network(network.nodes, with_geometry(network.edges, from_ragged(*to_ragged(simple)), network.edges.crs))
             created = np.setdiff1d(_crossing_pairs(candidate), before)
             involved = np.unique(np.concatenate([created // arrays.m, created % arrays.m]))
             involved = involved[changed[involved]]
@@ -739,10 +746,11 @@ def simplify_edges(network: Network, tolerance: float, return_lineage: bool = Fa
                 break
             simple[involved] = original[involved]
             changed[involved] = False
-    out = Network(network.nodes, with_geometry(network.edges, simple, network.edges.crs))
+    out = Network(network.nodes, with_geometry(network.edges, from_ragged(*to_ragged(simple)), network.edges.crs))
     return finish(out, [identity_lineage(network)], return_lineage)
 
 
+@operation
 def merge_edges(
     network: Network,
     by: Optional[Sequence[str]] = None,
@@ -873,8 +881,10 @@ def merge_edges(
 
     chain_lines = from_ragged(arrays.coords[np.concatenate(take)], np.concatenate([[0], np.cumsum(lengths)]))
     groups = np.asarray(chain_group, dtype=np.int64)
-    lines = arrays.lines[is_first].copy()
-    lines[groups] = chain_lines
+    # each group takes the line of its first member, or its chain if it is one
+    source = np.flatnonzero(is_first)
+    source[groups] = m + np.arange(len(groups))
+    lines = type(chain_lines)._concat_same_type([arrays.lines, chain_lines]).take(source)
     new_src, new_dst = src[is_first].copy(), dst[is_first].copy()
     new_src[groups], new_dst[groups] = chain_src, chain_dst
     ids = arrays.edge_ids[is_first].copy()
@@ -905,11 +915,12 @@ def duplicate_pairs(arrays: Arrays, tolerance: float, directed: bool = False) ->
     pairs = table.merge(table, on="key")
     pairs = pairs[pairs["edge_x"] < pairs["edge_y"]]
     a, b = pairs["edge_x"].to_numpy(), pairs["edge_y"].to_numpy()
-    apart = shapely.hausdorff_distance(arrays.lines[a], arrays.lines[b])
+    apart = shapely.hausdorff_distance(arrays.lines.take(a).to_shapely(), arrays.lines.take(b).to_shapely())
     same = apart <= tolerance
     return a[same], b[same]
 
 
+@operation
 def drop_duplicate_edges(
     network: Network,
     tolerance: float = 0,
@@ -943,6 +954,7 @@ def drop_duplicate_edges(
     return finish(Network(network.nodes, edges), [lineage], return_lineage)
 
 
+@operation
 def label_components(network: Network, column: str = "component") -> Network:
     """Add a column to nodes and edges numbering the connected part each is in.
 
@@ -959,12 +971,12 @@ def label_components(network: Network, column: str = "component") -> Network:
     """
     arrays = Arrays(network)
     group, _ = K.group_index(K.components(arrays.n, arrays.src, arrays.dst))
-    nodes, edges = network.nodes.copy(), network.edges.copy()
+    nodes, edges = pd.DataFrame(network.nodes).copy(), pd.DataFrame(network.edges).copy()
     nodes[column] = group
     edges[column] = group[arrays.src]
     return Network(
-        with_geometry(nodes, arrays.points, nodes.crs),
-        with_geometry(edges, arrays.lines, edges.crs),
+        with_geometry(nodes, arrays.points, network.nodes.crs),
+        with_geometry(edges, arrays.lines, network.edges.crs),
     )
 
 

@@ -16,10 +16,9 @@ from snkit.core import (
     Arrays,
     _distinct,
     check_distance,
-    geometry_array,
-    with_geometry,
 )
 from snkit.match import edge_overlaps, node_pairs
+from snkit.arrays import GEOM, ArrayNetwork, crs_of, operation, with_geometry
 from snkit.network import Network
 from snkit.operations import (
     _add_nodes,
@@ -32,6 +31,7 @@ Networks = Union[Dict[Any, Network], Sequence[Network]]
 _SIDE = "_snkit_side"
 
 
+@operation
 def combine(networks: Networks, column: Optional[str] = "source") -> Network:
     """Place networks side by side in one network, without connecting them.
 
@@ -60,7 +60,7 @@ def combine(networks: Networks, column: Optional[str] = "source") -> Network:
     """
     named = networks if isinstance(networks, dict) else dict(enumerate(networks))
     if not named:
-        return Network()
+        return ArrayNetwork()
     crs = None
     node_tables, edge_tables = [], []
     node_shift = edge_shift = 0
@@ -89,11 +89,12 @@ def combine(networks: Networks, column: Optional[str] = "source") -> Network:
     nodes = pd.concat(node_tables, ignore_index=True, sort=False)
     edges = pd.concat(edge_tables, ignore_index=True, sort=False)
     return Network(
-        with_geometry(nodes, np.asarray(nodes["geometry"], dtype=object), crs),
-        with_geometry(edges, np.asarray(edges["geometry"], dtype=object), crs),
+        with_geometry(nodes, nodes[GEOM].array, crs),
+        with_geometry(edges, edges[GEOM].array, crs),
     )
 
 
+@operation
 def stitch(
     networks: Networks,
     tolerance: float = 0,
@@ -163,8 +164,8 @@ def _rename_side(network: Network, column: Optional[str], named: Dict[Any, Netwo
             raise ValueError(f"a column named {column!r} already exists: choose another")
         nodes, edges = nodes.rename(columns={_SIDE: column}), edges.rename(columns={_SIDE: column})
     return Network(
-        with_geometry(nodes, geometry_array(nodes), nodes.crs),
-        with_geometry(edges, geometry_array(edges), edges.crs),
+        with_geometry(nodes, nodes[GEOM].array, crs_of(network)),
+        with_geometry(edges, edges[GEOM].array, crs_of(network)),
     )
 
 
@@ -195,7 +196,7 @@ def _overlay(a: Network, b: Network, tolerance: float, split: bool) -> Tuple[Net
         both = _add_nodes(both, new_xy)
         nodes = both.nodes.copy()
         nodes.loc[nodes.index[arrays.n :], _SIDE] = new_side
-        both = Network(with_geometry(nodes, geometry_array(nodes), nodes.crs), both.edges)
+        both = Network(with_geometry(nodes, nodes[GEOM].array, crs_of(both)), both.edges)
         both, _ = _split(
             both,
             arrays,
@@ -210,7 +211,7 @@ def _overlay(a: Network, b: Network, tolerance: float, split: bool) -> Tuple[Net
     # a's nodes first, so that a merged node takes a's position and id
     order = np.argsort(both.nodes[_SIDE].to_numpy() != "a", kind="stable")
     nodes = both.nodes.iloc[order]
-    both = Network(with_geometry(nodes, geometry_array(nodes), nodes.crs), both.edges)
+    both = Network(with_geometry(nodes, nodes[GEOM].array, crs_of(both)), both.edges)
     arrays = Arrays(both)
     node_side = both.nodes[_SIDE].to_numpy()
     pairs = node_pairs(arrays, tolerance)
@@ -247,11 +248,12 @@ def _select(network: Network, keep_edges: Any, keep_nodes: Any) -> Network:
     nodes = network.nodes[keep_nodes].drop(columns=_SIDE)
     edges = network.edges[keep_edges].drop(columns=_SIDE)
     return Network(
-        with_geometry(nodes, geometry_array(nodes), nodes.crs),
-        with_geometry(edges, geometry_array(edges), edges.crs),
+        with_geometry(nodes, nodes[GEOM].array, crs_of(network)),
+        with_geometry(edges, edges[GEOM].array, crs_of(network)),
     )
 
 
+@operation
 def union(a: Network, b: Network, tolerance: float = 0, split: bool = False) -> Network:
     """Everything in either network, with what they share kept once.
 
@@ -286,6 +288,7 @@ def union(a: Network, b: Network, tolerance: float = 0, split: bool = False) -> 
     return _select(merged, ~(twin & from_b), np.ones(len(merged.nodes), dtype=bool))
 
 
+@operation
 def intersection(a: Network, b: Network, tolerance: float = 0, split: bool = False) -> Network:
     """The parts of ``a`` that are also in ``b``.
 
@@ -308,6 +311,7 @@ def intersection(a: Network, b: Network, tolerance: float = 0, split: bool = Fal
     return _select(merged, twin & from_a, lone & in_both)
 
 
+@operation
 def difference(a: Network, b: Network, tolerance: float = 0, split: bool = False) -> Network:
     """The parts of ``a`` that are not in ``b``.
 

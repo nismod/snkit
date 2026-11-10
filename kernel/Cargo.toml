@@ -15,6 +15,7 @@ rayon = "1"
 robust = "1"
 pyo3 = { version = "0.23", features = ["extension-module", "abi3-py39"], optional = true }
 numpy = { version = "0.23", optional = true }
+arrow = { version = "60.1.0", default-features = false, features = ["ffi"] }
 
 [features]
 default = []

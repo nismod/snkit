@@ -16,6 +16,17 @@ import shapely
 from geopandas import GeoDataFrame, GeoSeries
 
 from snkit import _kernel as K
+from snkit.arrays import (
+    Frame,
+    LineArray,
+    PointArray,
+    _like,
+    is_arrays,
+    lines_of,
+    operation,
+    points_of,
+    with_geometry,
+)
 from snkit.network import Network
 
 ID = "id"
@@ -24,6 +35,8 @@ TO = "to_id"
 GEOM = "geometry"
 RESERVED = (ID, FROM, TO)
 
+# Lines or points to make a network from: a GeoDataFrame, a GeoSeries, a
+# sequence of geometries, or Arrow data (anything that offers an Arrow stream)
 Geometries = Union[GeoDataFrame, GeoSeries, Iterable[Any]]
 Agg = Optional[Dict[str, Union[str, Callable[..., Any]]]]
 
@@ -84,9 +97,9 @@ class Lines:
     """Array view of a set of line geometries"""
 
     def __init__(self, lines: Any):
-        self.lines = lines
-        self.coords, self.offsets = to_ragged(lines)
-        self.m = len(lines)
+        self.lines = LineArray.from_shapely(lines)
+        self.coords, self.offsets = self.lines.coords, self.lines.offsets
+        self.m = len(self.lines)
         self.seglen, self.measure, self.length = K.line_measures(self.coords, self.offsets)
 
     def place(self, vertex: Any, frac: Any) -> Any:
@@ -116,11 +129,11 @@ class Arrays(Lines):
                     f"{name} table has no {missing} column: build the network with "
                     "snkit.from_edges, from_nodes_and_edges or from_topology first"
                 )
-        super().__init__(geometry_array(edges))
+        super().__init__(lines_of(edges))
         self.node_ids = nodes[ID].to_numpy(dtype="uint64")
         self.edge_ids = edges[ID].to_numpy(dtype="uint64")
-        self.points = geometry_array(nodes)
-        self.xy = shapely.get_coordinates(self.points).reshape(-1, 2)
+        self.points = points_of(nodes)
+        self.xy = self.points.xy
         index = pd.Index(self.node_ids)
         self.src = index.get_indexer(edges[FROM].to_numpy(dtype="uint64")).astype(np.int64)
         self.dst = index.get_indexer(edges[TO].to_numpy(dtype="uint64")).astype(np.int64)
@@ -137,18 +150,12 @@ def geometry_array(table: GeoDataFrame) -> Any:
 
 
 def to_ragged(lines: Any) -> Tuple[K.FloatArray, K.IntArray]:
-    if len(lines) == 0:
-        return np.empty((0, 2)), np.zeros(1, dtype=np.int64)
-    kind, coords, offsets = shapely.to_ragged_array(lines, include_z=False)
-    if kind != shapely.GeometryType.LINESTRING:
-        raise ValueError("edge geometries must all be LineStrings")
-    return np.ascontiguousarray(coords, dtype=float), offsets[0].astype(np.int64)
+    lines = LineArray.from_shapely(lines)
+    return lines.coords, lines.offsets
 
 
-def from_ragged(coords: K.FloatArray, offsets: K.IntArray) -> Any:
-    if len(offsets) < 2:
-        return np.empty(0, dtype=object)
-    return shapely.from_ragged_array(shapely.GeometryType.LINESTRING, coords, (offsets,))
+def from_ragged(coords: K.FloatArray, offsets: K.IntArray) -> LineArray:
+    return LineArray(coords, offsets)
 
 
 def next_ids(existing: Any, count: int) -> Any:
@@ -156,25 +163,15 @@ def next_ids(existing: Any, count: int) -> Any:
     return np.arange(start, start + count, dtype="uint64")
 
 
-def with_geometry(table: pd.DataFrame, geoms: Any, crs: Any) -> GeoDataFrame:
-    """Rebuild a table as a GeoDataFrame with new geometries, id columns first"""
-    table = pd.DataFrame(table).reset_index(drop=True)
-    if GEOM in table.columns:
-        table = table.drop(columns=GEOM)
-    front = [c for c in RESERVED if c in table.columns]
-    table = table[front + [c for c in table.columns if c not in front]]
-    return GeoDataFrame(table, geometry=GeoSeries(geoms, crs=crs), crs=crs)
-
-
-def append_rows(table: GeoDataFrame, rows: GeoDataFrame) -> GeoDataFrame:
+def append_rows(table: Frame, rows: Frame) -> Frame:
     """Add rows that have only id columns and geometry; other attributes are left null"""
     if len(rows) == 0:
         return table
-    combined = pd.concat([table, rows], ignore_index=True, sort=False)
+    combined = pd.concat([pd.DataFrame(table), pd.DataFrame(rows)], ignore_index=True, sort=False)
     for column in RESERVED:
         if column in combined.columns:
             combined[column] = combined[column].astype("uint64")
-    return GeoDataFrame(combined, geometry=GEOM, crs=table.crs)
+    return with_geometry(combined, combined[GEOM].array, table.crs)
 
 
 def check_distance(network: Network, distance: Optional[float]) -> None:
@@ -230,59 +227,79 @@ def aggregate(table: pd.DataFrame, group: K.IntArray, count: int, agg: Agg) -> p
 # Creation
 
 
-def _as_table(data: Geometries) -> GeoDataFrame:
-    if isinstance(data, GeoDataFrame):
-        table = data.copy()
-        if table.geometry.name != GEOM:
-            table = table.rename_geometry(GEOM)
-    elif isinstance(data, GeoSeries):
-        table = GeoDataFrame(geometry=GeoSeries(data.values, crs=data.crs))
-    else:
-        table = GeoDataFrame(geometry=list(data))
-    return table.reset_index(drop=True)
+def _is_arrow(data: Any) -> bool:
+    """Whether data is Arrow (a table, a reader, a query result) and not a pandas table"""
+    return hasattr(data, "__arrow_c_stream__") and not isinstance(data, (pd.DataFrame, pd.Series))
 
 
-def _explode(table: GeoDataFrame) -> GeoDataFrame:
-    """One row per part of each multi-part line, in place and in order"""
-    geoms = geometry_array(table)
-    multi = shapely.get_type_id(geoms) == 5
-    if not multi.any():
-        return table
-    parts, index = shapely.get_parts(geoms[multi], return_index=True)
-    rows = np.concatenate([np.flatnonzero(~multi), np.flatnonzero(multi)[index]])
-    order = np.argsort(rows, kind="stable")
-    exploded = np.concatenate([geoms[~multi], parts])[order]
-    return with_geometry(table.iloc[rows[order]], exploded, table.crs)
+def _in_arrays(*data: Any) -> bool:
+    """Whether a network made from this data should hold its geometry in arrays"""
+    return any(_is_arrow(item) or isinstance(item, Frame) for item in data)
 
 
-def _clean(table: GeoDataFrame, type_id: int, what: str, invalid: str) -> GeoDataFrame:
+def _read(data: Geometries, want: str, invalid: str) -> Frame:
+    """Read lines or points, from whatever form they come in, into a Frame.
+
+    Multi-part lines become a row for each part. Geometries that are missing,
+    empty, of the wrong kind or (for lines) without length are refused or dropped.
+    """
     if invalid not in ("raise", "drop"):
         raise ValueError("invalid must be 'raise' or 'drop'")
-    geoms = shapely.force_2d(geometry_array(table))
+    kind = LineArray if want == "lines" else PointArray
+    if isinstance(data, Frame):
+        if not isinstance(data[GEOM].array, kind):
+            raise ValueError(f"expected {want}, in a table whose geometry is a {kind.__name__}")
+        return with_geometry(data, data[GEOM].array, data.crs)
+    if _is_arrow(data):
+        from snkit.io import arrow_to_frame
+
+        return arrow_to_frame(data, want, invalid)
+
+    if isinstance(data, GeoDataFrame):
+        table, geoms, crs = pd.DataFrame(data.drop(columns=data.geometry.name)), data.geometry.values, data.crs
+    elif isinstance(data, GeoSeries):
+        table, geoms, crs = pd.DataFrame(index=range(len(data))), data.values, data.crs
+    else:
+        geoms, crs = list(data), None
+        table = pd.DataFrame(index=range(len(geoms)))
+    geoms = np.empty(len(table), dtype=object) if len(table) == 0 else np.asarray(geoms, dtype=object)
+    rows = np.arange(len(geoms))
+    multi = shapely.get_type_id(geoms) == 5
+    if want == "lines" and multi.any():
+        # a row for each part, in place and in order
+        parts, index = shapely.get_parts(geoms[multi], return_index=True)
+        rows = np.concatenate([np.flatnonzero(~multi), np.flatnonzero(multi)[index]])
+        order = np.argsort(rows, kind="stable")
+        rows, geoms = rows[order], np.concatenate([geoms[~multi], parts])[order]
+    geoms = shapely.force_2d(geoms)
     ok = ~shapely.is_missing(geoms)
-    ok &= shapely.get_type_id(geoms) == type_id
+    ok &= shapely.get_type_id(geoms) == (1 if want == "lines" else 0)
     ok &= ~shapely.is_empty(geoms)
-    if type_id == 1:
+    if want == "lines":
         ok &= shapely.length(geoms) > 0
-    if not ok.all():
-        if invalid == "raise":
-            raise ValueError(
-                f"{int((~ok).sum())} geometries are not usable as {what} (missing, empty, "
-                "zero-length or the wrong type); pass invalid='drop' to discard them"
-            )
-        table, geoms = table[ok], geoms[ok]
-    return with_geometry(table, geoms, table.crs)
+    _refuse(int((~ok).sum()), want, invalid)
+    return with_geometry(table.iloc[rows[ok]], kind.from_shapely(geoms[ok]), crs)
 
 
-def _set_ids(table: GeoDataFrame, column: Optional[str]) -> GeoDataFrame:
+def _refuse(count: int, want: str, invalid: str) -> None:
+    if count and invalid == "raise":
+        what = "edges" if want == "lines" else "nodes"
+        raise ValueError(
+            f"{count} geometries are not usable as {what} (missing, empty, "
+            "zero-length or the wrong type); pass invalid='drop' to discard them"
+        )
+
+
+def _set_ids(table: Frame, column: Optional[str]) -> Frame:
     """Give a table an unsigned integer ``id``.
 
     A column of unique non-negative integers is used as the id. Anything else
     is kept as an ordinary attribute and a new id is generated.
     """
+    geoms, crs = table[GEOM].array, table.crs
     if column is None and ID in table.columns:
         column = ID
-    table = table.copy()
+    table = pd.DataFrame(table)
     if column is not None:
         if column not in table.columns:
             raise ValueError(f"no column named {column!r}")
@@ -294,11 +311,11 @@ def _set_ids(table: GeoDataFrame, column: Optional[str]) -> GeoDataFrame:
             ids = values.to_numpy(dtype="uint64")
             table = table.drop(columns=column)
             table[ID] = ids
-            return with_geometry(table, geometry_array(table), table.crs)
+            return with_geometry(table, geoms, crs)
         if column in RESERVED:
             table = table.rename(columns={column: f"{column}_original"})
     table[ID] = np.arange(len(table), dtype="uint64")
-    return with_geometry(table, geometry_array(table), table.crs)
+    return with_geometry(table, geoms, crs)
 
 
 def _distinct(points: K.FloatArray) -> Tuple[K.FloatArray, K.IntArray]:
@@ -358,19 +375,18 @@ def from_edges(
     >>> network.edges[["id", "from_id", "to_id"]].values.tolist()
     [[0, 0, 1], [1, 1, 2], [2, 1, 3]]
     """
-    table = _explode(_as_table(edges))
-    table = _set_ids(_clean(table, 1, "edges", invalid), edge_id)
-    coords, offsets = to_ragged(geometry_array(table))
-    xy, index = _distinct(_edge_ends(coords, offsets))
+    table = _set_ids(_read(edges, "lines", invalid), edge_id)
+    lines, crs = lines_of(table), table.crs
+    xy, index = _distinct(_edge_ends(lines.coords, lines.offsets))
     table[FROM] = index[0::2].astype("uint64")
     table[TO] = index[1::2].astype("uint64")
-    nodes = with_geometry(pd.DataFrame({ID: np.arange(len(xy), dtype="uint64")}), shapely.points(xy), table.crs)
-    network = Network(nodes, with_geometry(table, geometry_array(table), table.crs))
+    nodes = with_geometry(pd.DataFrame({ID: np.arange(len(xy), dtype="uint64")}), PointArray(xy), crs)
+    network = Network(nodes, with_geometry(table, lines, crs))
     if tolerance:
         from snkit.operations import merge_nodes
 
         network = merge_nodes(network, tolerance)  # type: ignore[assignment]
-    return network
+    return _like(network, _in_arrays(edges))  # type: ignore[no-any-return]
 
 
 def from_nodes_and_edges(
@@ -402,17 +418,15 @@ def from_nodes_and_edges(
     >>> network.edges[["from_id", "to_id"]].values.tolist()
     [[0, 1], [1, 2]]
     """
-    node_table = _set_ids(_clean(_as_table(nodes), 0, "nodes", invalid), node_id)
-    edge_table = _explode(_as_table(edges))
-    edge_table = _set_ids(_clean(edge_table, 1, "edges", invalid), edge_id)
+    node_table = _set_ids(_read(nodes, "points", invalid), node_id)
+    edge_table = _set_ids(_read(edges, "lines", invalid), edge_id)
     crs = edge_table.crs if edge_table.crs is not None else node_table.crs
     if node_table.crs is not None and edge_table.crs is not None and node_table.crs != edge_table.crs:
         raise ValueError("nodes and edges have different CRS")
     check_distance(Network(node_table, edge_table), tolerance)
 
-    points = geometry_array(node_table)
-    xy = shapely.get_coordinates(points).reshape(-1, 2)
-    coords, offsets = to_ragged(geometry_array(edge_table))
+    xy = points_of(node_table).xy
+    coords, offsets = to_ragged(lines_of(edge_table))
     ends = _edge_ends(coords, offsets)
     attached = K.nearest_points(ends, xy, tolerance)
 
@@ -420,19 +434,21 @@ def from_nodes_and_edges(
     new_xy, new_index = _distinct(ends[loose])
     attached[loose] = len(xy) + new_index
     new_nodes = with_geometry(
-        pd.DataFrame({ID: next_ids(node_table[ID].to_numpy(), len(new_xy))}),
-        shapely.points(new_xy),
-        crs,
+        pd.DataFrame({ID: next_ids(node_table[ID].to_numpy(), len(new_xy))}), PointArray(new_xy), crs
     )
-    node_table = append_rows(with_geometry(node_table, points, crs), new_nodes)
+    node_table = append_rows(with_geometry(node_table, PointArray(xy), crs), new_nodes)
     all_xy = np.concatenate([xy, new_xy])
     src, dst = attached[0::2], attached[1::2]
     coords = K.sync_ends(coords, offsets, all_xy, src, dst)
     node_ids = node_table[ID].to_numpy(dtype="uint64")
     edge_table[FROM] = node_ids[src]
     edge_table[TO] = node_ids[dst]
+    # an edge both of whose ends were moved onto one node may be left with no length
+    has_length = K.line_measures(coords, offsets)[2] > 0
+    _refuse(int((~has_length).sum()), "lines", invalid)
     edge_table = with_geometry(edge_table, from_ragged(coords, offsets), crs)
-    return Network(node_table, _clean(edge_table, 1, "edges", invalid))
+    edge_table = with_geometry(edge_table[has_length], lines_of(edge_table)[has_length], crs)
+    return _like(Network(node_table, edge_table), _in_arrays(nodes, edges))  # type: ignore[no-any-return]
 
 
 def from_topology(
@@ -469,14 +485,15 @@ def from_topology(
     >>> network.edges[["id", "from_id", "to_id"]].values.tolist()
     [[0, 0, 1]]
     """
-    original = _as_table(nodes)
+    original = _read(nodes, "points", "raise")
     if node_id not in original.columns:
         raise ValueError(f"nodes have no column named {node_id!r}")
     keys = pd.Index(original[node_id])
     if not keys.is_unique:
         raise ValueError(f"node ids in column {node_id!r} are not unique")
-    node_table = _set_ids(_clean(original, 0, "nodes", "raise"), node_id)
-    edge_table = _clean(_as_table(edges), 1, "edges", "raise")
+    node_table = _set_ids(original, node_id)
+    edge_table = _read(edges, "lines", "raise")
+    edge_lines, edge_crs = lines_of(edge_table), edge_table.crs
     for column in (from_id, to_id):
         if column not in edge_table.columns:
             raise ValueError(f"edges have no column named {column!r}")
@@ -490,16 +507,16 @@ def from_topology(
     for column in (from_id, to_id):
         if converted:
             renames[column] = f"{column}_original" if column in RESERVED else column
-    edge_table = edge_table.rename(columns=renames)
+    edge_table = pd.DataFrame(edge_table).rename(columns=renames)
     if not converted:
         edge_table = edge_table.drop(columns=[c for c in (from_id, to_id) if c not in RESERVED])
     edge_table[FROM] = node_ids[src]
     edge_table[TO] = node_ids[dst]
-    edge_table = _set_ids(edge_table, edge_id)
+    edge_table = _set_ids(with_geometry(edge_table, edge_lines, edge_crs), edge_id)
 
     check_distance(Network(node_table, edge_table), tolerance)
-    xy = shapely.get_coordinates(geometry_array(node_table)).reshape(-1, 2)
-    coords, offsets = to_ragged(geometry_array(edge_table))
+    xy = points_of(node_table).xy
+    coords, offsets = to_ragged(lines_of(edge_table))
     ends = _edge_ends(coords, offsets)
     gap = np.hypot(*(ends - xy[np.column_stack([src, dst]).ravel()]).T)
     if len(gap) and gap.max() > tolerance:
@@ -509,8 +526,8 @@ def from_topology(
             "to move them onto their nodes"
         )
     coords = K.sync_ends(coords, offsets, xy, src, dst)
-    edge_table = with_geometry(edge_table, from_ragged(coords, offsets), edge_table.crs)
-    return Network(node_table, edge_table)
+    edge_table = with_geometry(edge_table, from_ragged(coords, offsets), edge_crs)
+    return _like(Network(node_table, edge_table), _in_arrays(nodes, edges))  # type: ignore[no-any-return]
 
 
 def validate(network: Network, raise_errors: bool = False) -> List[str]:
@@ -542,15 +559,16 @@ def validate(network: Network, raise_errors: bool = False) -> List[str]:
             problems.append(f"{int(dangling.sum())} edges refer to nodes that do not exist")
     if len(nodes) and len(edges) and nodes.crs != edges.crs:
         problems.append("nodes and edges have different CRS")
-    points, lines = geometry_array(nodes), geometry_array(edges)
-    bad_points = shapely.is_missing(points) | (shapely.get_type_id(points) != 0)
-    bad_points |= shapely.is_empty(points)
-    if bad_points.any():
-        problems.append(f"{int(bad_points.sum())} node geometries are not non-empty Points")
-    bad_lines = shapely.is_missing(lines) | (shapely.get_type_id(lines) != 1)
-    bad_lines |= shapely.is_empty(lines)
-    if bad_lines.any():
-        problems.append(f"{int(bad_lines.sum())} edge geometries are not non-empty LineStrings")
+    if not is_arrays(network):  # geometry held in arrays is points and lines by construction
+        points, lines = geometry_array(nodes), geometry_array(edges)
+        bad_points = shapely.is_missing(points) | (shapely.get_type_id(points) != 0)
+        bad_points |= shapely.is_empty(points)
+        if bad_points.any():
+            problems.append(f"{int(bad_points.sum())} node geometries are not non-empty Points")
+        bad_lines = shapely.is_missing(lines) | (shapely.get_type_id(lines) != 1)
+        bad_lines |= shapely.is_empty(lines)
+        if bad_lines.any():
+            problems.append(f"{int(bad_lines.sum())} edge geometries are not non-empty LineStrings")
     if not problems and len(edges):
         arrays = Arrays(network)
         ends = _edge_ends(arrays.coords, arrays.offsets)
