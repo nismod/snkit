@@ -33,6 +33,7 @@ from snkit.operations import (
 )
 from snkit.multi import combine, difference, intersection, stitch, union
 from snkit.io import read_network
+from snkit.tiled import build_network
 
 __author__ = "Tom Russell"
 __copyright__ = "Tom Russell"
@@ -49,6 +50,7 @@ except (PackageNotFoundError, ValueError):
 #   from snkit import *
 __all__ = [
     "ArrayNetwork",
+    "build_network",
     "read_network",
     "to_arrays",
     "Lineage",

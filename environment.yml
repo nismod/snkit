@@ -8,6 +8,7 @@ dependencies:
   - rust
   - maturin
   - geopandas
+  - pyarrow
   - networkx
   - mypy
   - ruff

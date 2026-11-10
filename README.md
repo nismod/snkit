@@ -178,9 +178,32 @@ network = snkit.link_nodes_to_edges(network)          # connect the depot to the
 | join things up | `merge_nodes`, `link_nodes`, `link_nodes_to_edges`, `split_edges_at_nodes`, `split_edges_at_crossings` |
 | tidy | `merge_edges`, `simplify_edges`, `drop_duplicate_edges`, `label_components` |
 | work with several networks | `combine`, `stitch`, `union`, `intersection`, `difference` |
+| work at scale | `to_arrays`, `ArrayNetwork`, `snkit.io.read`, `read_network`, `build_network` |
 
 These functions, and the older ones in `snkit.network`, run on a kernel written in Rust
 that works on plain arrays and is compiled into the package ([`kernel/`](kernel/README.md)).
+
+For a large network, hold geometry in arrays instead of GeoDataFrames by starting from
+Arrow data, and read and write files without a geometry object per feature
+(`pip install snkit[arrow]`):
+
+```python
+import snkit.io
+
+network = snkit.from_edges(snkit.io.read("roads.gpkg"))   # an ArrayNetwork
+network = snkit.split_edges_at_crossings(network)
+network.to_parquet("nodes.parquet", "edges.parquet")
+```
+
+For a network too large for memory, build it tile by tile, from file to file:
+
+```python
+built = snkit.build_network("roads.parquet", "network/", max_tile_edges=250_000)
+part = built.read(bbox=(430000, 420000, 440000, 430000))   # one area, into memory
+```
+
+The source can be GeoParquet, any format GDAL reads, or the result of a query in an engine
+such as SedonaDB or DuckDB.
 
 Each function's documentation has a small example. The
 [design document](docs/source/design.md) explains the ideas, with a worked example of every

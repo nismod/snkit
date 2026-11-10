@@ -17,9 +17,13 @@ moves attributes by the positions it returns.
 | `segment_crossings` | Finds where line segments meet, tile by tile and in parallel, deciding with exact predicates. |
 | `point_pairs`, `nearest_points` | Finds points near each other. |
 | `points_near_lines`, `nearest_lines` | Finds lines near each point, and the nearest place on them. |
+| `read_geometry`, `geometry_bounds` | Reads geometry from a stream of Arrow record batches, as WKB or native GeoArrow. |
+| `tile_owners`, `tile_reaches` | Says which tile of a tiling each place is in, and which tiles each box reaches into. |
 
 It has its own spatial index (a static R-tree packed along a Hilbert curve, in `rtree.rs`)
-and depends only on `rayon` and `robust`.
+and depends only on `rayon`, `robust` and `arrow`. Tables of geometry come in through the
+Arrow C stream interface, so a caller in any language that has Arrow can use the kernel
+without geometry code of its own.
 
 ## Building
 

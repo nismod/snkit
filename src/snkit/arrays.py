@@ -20,7 +20,7 @@ else that offers an Arrow stream) and gives Arrow tables with GeoArrow geometry.
 from __future__ import annotations
 
 from functools import wraps
-from typing import Any, Callable, Dict, Optional, Sequence, Tuple, TypeVar
+from typing import Any, Callable, Optional, Sequence, Tuple, TypeVar
 
 import numpy as np
 import pandas as pd
@@ -28,7 +28,6 @@ import shapely
 from geopandas import GeoDataFrame, GeoSeries
 from pandas.api.extensions import ExtensionArray, ExtensionDtype, register_extension_dtype
 
-from snkit import _kernel as K
 from snkit.network import Network
 
 GEOM = "geometry"
@@ -91,6 +90,12 @@ class _GeometryArray(ExtensionArray):
 
     def to_shapely(self) -> Any:
         raise NotImplementedError
+
+    def __arrow_array__(self, type: Any = None) -> Any:
+        """As a GeoArrow array, sharing the coordinate memory (how pyarrow converts a column)"""
+        from snkit.io import geometry_array
+
+        return geometry_array(self)[0]
 
     def _checked(self, indices: Any, allow_fill: bool) -> Any:
         indices = np.asarray(indices, dtype=np.int64)
@@ -343,11 +348,15 @@ class ArrayNetwork(Network):
         transform = pyproj.Transformer.from_crs(crs_of(self), new, always_xy=True).transform
         nodes, lines = points_of(self.nodes), lines_of(self.edges)
         xy = np.column_stack(transform(nodes.xy[:, 0], nodes.xy[:, 1])) if len(nodes) else nodes.xy
-        coords = np.column_stack(transform(lines.coords[:, 0], lines.coords[:, 1])) if len(lines.coords) else lines.coords
+        coords = (
+            np.column_stack(transform(lines.coords[:, 0], lines.coords[:, 1])) if len(lines.coords) else lines.coords
+        )
         self.nodes = with_geometry(self.nodes, PointArray(xy), new)
         self.edges = with_geometry(self.edges, LineArray(coords, lines.offsets), new)
 
-    def to_file(self, filename: Any, nodes_layer: Optional[str] = "nodes", edges_layer: Optional[str] = "edges", **kwargs: Any) -> None:
+    def to_file(
+        self, filename: Any, nodes_layer: Optional[str] = "nodes", edges_layer: Optional[str] = "edges", **kwargs: Any
+    ) -> None:
         """Write nodes and edges to a geographic data file with layers, by way of GeoPandas"""
         self.to_geopandas().to_file(filename, nodes_layer, edges_layer, **kwargs)
 

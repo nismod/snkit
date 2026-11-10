@@ -88,6 +88,31 @@ def _table(data: Any) -> Any:
     return data if isinstance(data, pa.Table) else pa.table(data)
 
 
+def reader(data: Any) -> Any:
+    """Arrow data of any kind as a :class:`pyarrow.RecordBatchReader`, read as it is used where possible"""
+    pa = _pyarrow()
+    if isinstance(data, pa.RecordBatchReader):
+        return data
+    if hasattr(pa.RecordBatchReader, "from_stream"):
+        return pa.RecordBatchReader.from_stream(data)
+    return pa.table(data).to_reader()  # older pyarrow: read it all first
+
+
+def plain(table: Any) -> Any:
+    """A table with any string-view or binary-view columns (which query engines
+    produce, and pyarrow cannot yet reorder) as ordinary strings and binary"""
+    pa = _pyarrow()
+    fields = []
+    for field in table.schema:
+        if str(field.type) == "string_view":
+            field = field.with_type(pa.large_string())
+        elif str(field.type) == "binary_view":
+            field = field.with_type(pa.large_binary())
+        fields.append(field)
+    schema = pa.schema(fields, table.schema.metadata)
+    return table if schema.equals(table.schema) else table.cast(schema)
+
+
 def arrow_to_frame(data: Any, want: str, invalid: str = "raise", column: Optional[str] = None) -> Frame:
     """Read Arrow data into a Frame, decoding its geometry in the kernel.
 
@@ -100,7 +125,7 @@ def arrow_to_frame(data: Any, want: str, invalid: str = "raise", column: Optiona
     name = geometry_field(table.schema, column)
     coords, offsets, row, bad, rows = _native.read_geometry(table.select([name]), want, name)
     _refuse(len(bad), want, invalid)
-    attributes = table.drop_columns([name] + _covering(table.schema, name))
+    attributes = plain(table.drop_columns([name] + _covering(table.schema, name)))
     if len(row) != rows or len(bad):
         attributes = attributes.take(row)
     geometry = LineArray(coords, offsets) if want == "lines" else PointArray(coords)
@@ -122,7 +147,9 @@ def geometry_array(geometry: Any, encoding: str = "interleaved", crs: Any = None
     lines = isinstance(geometry, LineArray)
     xy = geometry.coords if lines else geometry.xy
     if encoding == "interleaved":
-        vertices = pa.FixedSizeListArray.from_arrays(pa.array(xy.reshape(-1)), type=pa.list_(pa.field("xy", pa.float64(), False), 2))
+        vertices = pa.FixedSizeListArray.from_arrays(
+            pa.array(xy.reshape(-1)), type=pa.list_(pa.field("xy", pa.float64(), False), 2)
+        )
     else:
         columns = [pa.array(np.ascontiguousarray(xy[:, 0])), pa.array(np.ascontiguousarray(xy[:, 1]))]
         fields = [pa.field("x", pa.float64(), False), pa.field("y", pa.float64(), False)]
@@ -266,7 +293,10 @@ def read_parquet(
     column
         The geometry column, if the file does not say which it is.
 
-    Returns a :class:`pyarrow.RecordBatchReader`, one batch for each row group read.
+    Returns
+    -------
+    pyarrow.RecordBatchReader
+        One batch for each row group read.
     """
     import pyarrow.parquet as pq
 
@@ -277,10 +307,19 @@ def read_parquet(
     wanted = np.ones(len(groups), dtype=bool)
     if bbox is not None:
         known = groups["xmin"].notna().to_numpy()
-        outside = (groups["xmin"] > bbox[2]) | (groups["xmax"] < bbox[0]) | (groups["ymin"] > bbox[3]) | (groups["ymax"] < bbox[1])
+        outside = (
+            (groups["xmin"] > bbox[2])
+            | (groups["xmax"] < bbox[0])
+            | (groups["ymin"] > bbox[3])
+            | (groups["ymax"] < bbox[1])
+        )
         wanted = ~(known & outside.to_numpy())
     names = None if columns is None else list(dict.fromkeys([*columns, name]))
-    schema = file.schema_arrow if names is None else pa.schema([file.schema_arrow.field(n) for n in names], file.schema_arrow.metadata)
+    schema = (
+        file.schema_arrow
+        if names is None
+        else pa.schema([file.schema_arrow.field(n) for n in names], file.schema_arrow.metadata)
+    )
 
     def batches() -> Iterator[Any]:
         for g in np.flatnonzero(wanted):

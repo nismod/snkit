@@ -23,7 +23,8 @@ requires-python = ">=3.9"
 dependencies = ["geopandas>=1.0", "numpy", "pandas", "shapely>=2.0"]
 
 [project.optional-dependencies]
-dev = ["mypy", "nbstripout", "pre-commit", "pytest", "pytest-cov", "ruff"]
+arrow = ["pyarrow>=14"]
+dev = ["mypy", "nbstripout", "pre-commit", "pyarrow>=14", "pytest", "pytest-cov", "ruff"]
 docs = ["myst-parser", "sphinx"]
 networkx = ["networkx>=3.0"]
 igraph = ["python-igraph>=1.0"]

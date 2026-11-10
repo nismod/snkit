@@ -576,8 +576,9 @@ networks to the last bit, before the NumPy version was removed. The kernel is no
 against answers worked out the slow way (`tests/test_kernel.py`) and by its own unit tests
 (`cargo test` in `kernel/`).
 
-Shapely is still used for three things the kernel does not do: converting geometry to and
-from arrays, `simplify_edges`, and the buffer-and-intersect step of `match_edges`.
+Shapely is still used for three things the kernel does not do: converting geometry
+objects to and from arrays where GeoDataFrames come in and go out, `simplify_edges`, and
+the buffer-and-intersect step of `match_edges`.
 
 ### Measurements
 
@@ -598,21 +599,24 @@ All on one machine with 4 cores and 15 GB, one run each, in seconds.
 The old functions grew faster than linearly, so the gap widens with size: after the rewrite
 the whole sequence takes about 2 s at 100 thousand edges.
 
-**The operations of the new API on tables** (`benchmarks/bench.py`, a grid that becomes one
-million edges once split at its 600 thousand crossings):
+**The operations of the new API** (`benchmarks/bench.py`, a grid that becomes one million
+edges once split at its 600 thousand crossings), on a network of GeoDataFrames and on the
+same network held in arrays:
 
-| Operation | NumPy kernel (removed) | Rust kernel |
+| Operation | GeoDataFrames | Arrays |
 | --- | --- | --- |
-| `split_edges_at_crossings` | 12.1 | 2.0 |
-| `link_nodes_to_edges` (10% as many points) | 4.0 | 2.5 |
-| `merge_nodes` | 2.4 | 1.3 |
-| `split_edges_at_nodes` | 5.5 | 2.0 |
-| `merge_edges` | 1.1 | 1.1 |
-| `simplify_edges` | 25.6 | 2.8 |
-| `label_components` | 4.7 | 0.5 |
-| peak memory | 3.6 GB | 1.5 GB |
+| `split_edges_at_crossings` | 2.7 | 1.7 |
+| `link_nodes_to_edges` (10% as many points) | 3.9 | 2.5 |
+| `merge_nodes` | 2.6 | 1.2 |
+| `split_edges_at_nodes` | 3.1 | 1.8 |
+| `merge_edges` | 2.9 | 1.4 |
+| `simplify_edges` | 5.5 | 3.8 |
+| `label_components` | 2.1 | 0.6 |
+| peak memory | 1.8 GB | 1.3 GB |
 
-What time remains is mostly spent building tables and geometry objects around the kernel.
+The difference in time is the conversion of every geometry to and from objects at each
+call. (With the NumPy kernel that has since been removed, the same run took 12 s for
+`split_edges_at_crossings`, 26 s for `simplify_edges`, and 3.6 GB.)
 
 **The kernel on arrays alone** (`benchmarks/bench_kernel.py`: random three-segment
 lines, find crossings, cut, label components, find close nodes):
@@ -626,64 +630,126 @@ lines, find crossings, cut, label components, find close nodes):
 That is about 190 bytes per edge at the peak, of which the input and output geometry are
 about 80, and time that grows in proportion to size.
 
-### Scaling to tens and hundreds of millions
+### Networks held in arrays
 
-The measurements say where the limits are.
+A GeoDataFrame keeps one Python object per geometry, and most of the memory of a network
+held that way is those objects. So inside every operation geometry is kept as the kernel
+wants it: one array of coordinates for all lines, with offsets marking where each begins.
+The arrays sit in an ordinary column of an ordinary pandas table (a pandas extension type,
+`LineArray` or `PointArray`), so they follow their rows through every selection, reordering
+and concatenation that the operations do on attributes.
 
-1. **The table layer is the first limit, not the kernel.** A million edges held as a
-   GeoDataFrame of Shapely objects cost 1.5 GB at the peak of an operation; the same in
-   arrays cost a fifth of that. Tens of millions of edges fit in the memory of a laptop
-   as arrays and do not as tables. So the first step is a path that keeps geometry in
-   arrays from file to file - reading GeoParquet or GeoArrow straight into the kernel's
-   layout, carrying attributes as Arrow tables moved by `take`, and never making a
-   geometry object per feature. The kernel already works this way; the Python layer
-   around it needs an array-backed `Network` alongside the GeoDataFrame one.
+- An `ArrayNetwork` is a network that stays in this form. Every operation takes one and
+  returns one, and nothing is converted to geometry objects along the way.
+- A `Network` of GeoDataFrames is still accepted everywhere, and is what the operations
+  return when given one. It is converted to arrays on the way into each operation and back
+  on the way out - which costs time on a large network, so a long chain of operations on a
+  large network is better run on `snkit.to_arrays(network)`.
+- The functions of `snkit.network`, and the demonstration notebook, work on GeoDataFrames
+  as before. The notebook is run as a test.
 
-2. **Work is done in tiles, so the index never covers the whole network.** Finding
-   crossings divides the area into tiles of about 16 thousand segments. A segment belongs
-   to every tile it passes through; a crossing is reported by the tile its coordinate
-   falls in, so it is found exactly once. Each tile builds a small index, searches it and
-   throws it away, and tiles run in parallel. Whole-network memory for the search is 8
-   bytes per segment. This made the search faster as well as smaller. The same division
-   serves the other matchers, with tiles overlapping by the tolerance.
+### Arrow is the way in and out
 
-3. **The same tiles are the unit for working out of core.** When the network itself does
-   not fit, it is stored tile by tile (GeoParquet partitioned by tile, or memory-mapped
-   Arrow), and each operation becomes: for each tile, load it with a margin as wide as the
-   tolerance, match, edit, write. Matching and splitting are local, so this is exact, not
-   approximate. Memory is then set by the tile size and the number of threads, and is the
-   user's to choose. Two things need a pass over the whole: components, which is a
-   union-find over node positions at 4 bytes per node (400 MB for 100 million nodes), and
-   assigning ids, which is a running count. `stitch` is the operation that joins tiles
-   back together.
+The kernel reads geometry from a stream of Arrow record batches (the Arrow C stream
+interface), as WKB or as native GeoArrow in either layout, and decodes it straight into its
+flat arrays. So anything that produces Arrow can feed it, with no geometry objects and no
+copy through Python:
 
-4. **Smaller numbers.** The interface uses 64-bit integers throughout today. Node and edge
-   positions fit in 32 bits up to 4 billion, which halves the size of topology and of
-   every table of matches. Storing coordinates on a fixed grid as 32-bit integers
-   (section 6) would halve geometry too and make exact predicates cheap; that is a larger
-   decision because it changes what coordinates mean.
+| Source | How | What it can skip |
+| --- | --- | --- |
+| GeoParquet | `snkit.io.read_parquet`, with pyarrow | Row groups outside a bounding box, by the statistics the file keeps for each: a GeoParquet "covering" column, or the `x` and `y` columns of natively encoded geometry |
+| GeoPackage, FlatGeobuf, Shapefile, anything GDAL reads | `snkit.io.read`, with pyogrio | Whatever the format's own spatial index allows: GDAL applies the bounding box with the R-tree of a GeoPackage, the packed tree of a FlatGeobuf, the `.qix` of a Shapefile |
+| A query engine: SedonaDB, DuckDB | Pass the query result itself | Whatever the engine prunes; filters and joins are written in SQL |
+| A GeoDataFrame | Pass it, or `gdf.to_arrow()` | - |
 
-5. **Even tiles assume even data.** A grid of equal tiles suits a network spread evenly.
-   Real networks are dense in cities, so the tiling should become adaptive (split a tile
-   that is too full) before the out-of-core path is relied on.
+`snkit.from_edges`, `from_nodes_and_edges` and `from_topology` accept any of these and give
+an `ArrayNetwork`. Going out, a network gives Arrow tables with GeoArrow geometry that
+share its coordinate memory, and `to_parquet` writes GeoParquet with native geometry,
+sorted along a space-filling curve so that the statistics of each row group describe a
+small area.
 
-By these numbers, 100 million edges need about 20 GB and about three minutes as arrays in memory
-on one machine, or a memory budget of the user's choosing once tiles are read from disk.
-Neither has been run at that size; the largest run here is 52 million edges.
+SedonaDB and pyogrio are both tested as sources. Neither is required: pyarrow alone reads
+and writes GeoParquet. SedonaDB earns its place when the selection is more than a box - a
+join against a boundary, a filter on attributes - since that work then happens before
+snkit sees a row.
+
+Numbers cross between Python and the kernel as NumPy arrays, which are the same memory as
+Arrow arrays; tables of geometry cross as Arrow streams.
+
+### Building out of core, in tiles
+
+`snkit.build_network(source, destination)` turns a file or stream of lines into a network
+on disk - a node at every end and crossing, edges cut there, attributes carried over -
+holding one tile in memory at a time. It gives the same network as `from_edges` then
+`split_edges_at_crossings` would in memory; the tests check that it does, feature for
+feature.
+
+1. **Plan.** Space is divided by a tree of splits, each at the median of the edges on
+   the wider axis, until no tile has more than `max_tile_edges`. Tiles are therefore small
+   where the network is dense and large where it is sparse. The plan is made from a sample
+   of the edges - or, for a GeoParquet file already sorted in space, from its row-group
+   statistics alone, without reading any data.
+2. **Partition.** Edges are read once, in batches, and written to scratch files by tile.
+   An edge goes to every tile it reaches into, and belongs to the one its first vertex
+   is in.
+3. **Find.** Each tile in turn finds the nodes that lie in it: ends of edges, and
+   crossings. Tiles do not overlap and leave no gaps, so every place is in exactly one
+   tile and every node is found exactly once. What each edge needs to know - its end nodes
+   and where to cut it - is written to scratch for the tile the edge belongs to.
+4. **Cut.** Each tile in turn loads the edges that belong to it, with what was found for
+   them, cuts them and writes them out.
+
+Nothing is cut at tile boundaries and nothing is approximate: an edge running through ten
+tiles has its crossings found by ten tiles and is cut once. Each tile is written as a row
+group, so the result is itself sorted in space and can be read in part by bounding box.
+
+Measured (`benchmarks/bench_tiled.py`: random lines a hundred times as dense at one side
+of the area as at the other, `max_tile_edges` of 100 thousand, one run each):
+
+| Lines in | Edges out | Tiles | Time | Peak memory |
+| --- | --- | --- | --- | --- |
+| 2 million | 5.1 million | 32 | 20 s | 0.4 GB |
+| 10 million | 25 million | 128 | 114 s | 0.5 GB |
+| 30 million | 76 million | 512 | 412 s | 0.5 GB |
+
+The same 2 million lines built in memory, in arrays, give the same counts of nodes and
+edges, in 29 s and 3.6 GB. Out of core, memory is set by `max_tile_edges` and not by the
+size of the network.
+
+**What bounds it, and what does not yet.**
+
+- Memory follows the number of edges *reaching into* a tile, and the number of crossings
+  found in it. Edges much longer than a tile reach into many, and a place where very many
+  edges meet cannot be divided; a warning is given when a tile ends up far over the limit.
+  Tiles are planned by edges alone, so where lines are packed so closely that each crosses
+  dozens of others, a tile holds far more crossings than edges: an earlier test whose
+  density had no upper bound took 3.6 GB at 10 million lines. Planning by an estimate of
+  crossings as well would close that.
+- Scratch space is about three times the size of the source while the build runs.
+- Tiles are worked through one after another. They are independent within each of the
+  last two steps, so they can be run in parallel; that is not done yet.
+- Only this one pipeline runs out of core, and only with exact matching. Operations that
+  use a tolerance (merging near nodes, linking nodes to edges) need tiles that overlap by
+  the tolerance, and connected components need a pass over the whole; these are the next
+  to build, on the same plan, partition and scratch machinery. Until then, read a region
+  of the built network with `Built.read(bbox=...)` and work on it in memory.
+- Node and edge positions are 64-bit throughout. Thirty-two bits would do up to 4 billion
+  and halve the size of topology.
 
 ### Stages
 
 1. *Reference implementation in Python* (done, and since removed).
 2. *Existing functions rebuilt on the kernel* (done; section 9).
-3. *Kernel in Rust* (done), now the only implementation.
-4. *Array-backed networks*: keep geometry in arrays from file to file, so that the table
-   layer stops being the limit on size. **This is the next step.**
-5. *Tiled, out-of-core operation*, with adaptive tiles, as above.
-6. *Conformance cases* as data files, which a front end in any language can run.
-7. *The remaining geometry in the kernel*: simplification and edge-to-edge matching, which
+3. *Kernel in Rust* (done), the only implementation.
+4. *Networks held in arrays, Arrow in and out* (done).
+5. *Building out of core in adaptive tiles* (done for creation and exact noding).
+6. *The other operations out of core*: tolerance-based matching with overlapping tiles,
+   connected components, and tiles in parallel. **This is the next step.**
+7. *Conformance cases* as data files, which a front end in any language can run.
+8. *The remaining geometry in the kernel*: simplification and edge-to-edge matching, which
    would remove the last per-feature use of Shapely.
-8. *Other language front ends* - R through extendr, the browser through WebAssembly -
-   which are thin: table in, kernel call, `take`, table out.
+9. *Other language front ends* - R through extendr, the browser through WebAssembly.
+   With Arrow streams at the kernel's boundary these need no geometry code of their own.
 
 ### Packaging
 
@@ -762,11 +828,12 @@ These were open questions; all are now decided, and the rest of this document fo
 ## 11. Implementation status
 
 Implemented and tested: everything in section 4, the matchers, lineage, attribute rules,
-validation and the benchmark script.
+validation, networks held in arrays, Arrow and file reading and writing, building out of
+core, and the benchmark scripts.
 
 Not yet done, in rough order of value:
 
-- array-backed networks and tiled, out-of-core operation (section 8);
+- the other operations out of core, and tiles in parallel (section 8);
 - conformance cases as language-neutral data files (section 7);
 - simplification and edge-to-edge matching in the kernel (section 8);
 - snap-rounding to a coordinate grid (section 6);

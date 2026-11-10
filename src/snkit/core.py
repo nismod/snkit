@@ -23,7 +23,6 @@ from snkit.arrays import (
     _like,
     is_arrays,
     lines_of,
-    operation,
     points_of,
     with_geometry,
 )

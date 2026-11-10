@@ -1,6 +1,10 @@
 """Time the main operations on a synthetic network.
 
     python benchmarks/bench.py 100000
+    python benchmarks/bench.py 100000 --arrays
+
+With ``--arrays`` the network is held in arrays (an ArrayNetwork) instead of
+in GeoDataFrames.
 
 builds a network of roughly that many edges: long straight lines forming a
 grid, so that every junction must be found as a crossing, plus scattered
@@ -34,11 +38,17 @@ def timed(label, function, *args, **kwargs):
     return result
 
 
-def main(target_edges):
+def main(target_edges, arrays=False):
     rng = np.random.default_rng(0)
     lines, extent = grid_lines(target_edges, rng)
     points = shapely.points(rng.uniform(0, extent - 100, (target_edges // 10, 2)))
 
+    if arrays:
+        # hand the lines and points over as Arrow, so that the network is held in arrays throughout
+        import geopandas
+
+        lines = geopandas.GeoDataFrame(geometry=lines).to_arrow(geometry_encoding="geoarrow")
+        points = geopandas.GeoDataFrame(geometry=points).to_arrow(geometry_encoding="geoarrow")
     network = timed("from_nodes_and_edges", snkit.from_nodes_and_edges, points, lines)
     network = timed("split_edges_at_crossings", snkit.split_edges_at_crossings, network)
     print(f"  {len(network.nodes):,} nodes, {len(network.edges):,} edges")
@@ -55,4 +65,4 @@ def main(target_edges):
 
 
 if __name__ == "__main__":
-    main(int(sys.argv[1]) if len(sys.argv) > 1 else 100_000)
+    main(int(sys.argv[1]) if len(sys.argv) > 1 else 100_000, "--arrays" in sys.argv)

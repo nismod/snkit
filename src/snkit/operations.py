@@ -738,7 +738,9 @@ def simplify_edges(network: Network, tolerance: float, return_lineage: bool = Fa
     if changed.any():
         before = _crossing_pairs(network)
         while True:
-            candidate = Network(network.nodes, with_geometry(network.edges, from_ragged(*to_ragged(simple)), network.edges.crs))
+            candidate = Network(
+                network.nodes, with_geometry(network.edges, from_ragged(*to_ragged(simple)), network.edges.crs)
+            )
             created = np.setdiff1d(_crossing_pairs(candidate), before)
             involved = np.unique(np.concatenate([created // arrays.m, created % arrays.m]))
             involved = involved[changed[involved]]
