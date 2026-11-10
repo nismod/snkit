@@ -15,7 +15,6 @@ import numpy as np
 import shapely
 
 import snkit
-import snkit._kernel
 
 
 def grid_lines(target_edges, rng):
@@ -52,7 +51,7 @@ def main(target_edges):
     timed("validate", snkit.validate, network)
     print(f"  {len(network.nodes):,} nodes, {len(network.edges):,} edges")
     peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
-    print(f"kernel: {snkit._kernel.BACKEND}; peak memory {peak:,.0f} MiB")
+    print(f"peak memory {peak:,.0f} MiB")
 
 
 if __name__ == "__main__":

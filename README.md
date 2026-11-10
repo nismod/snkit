@@ -76,10 +76,13 @@ Clone this repository:
 
     git clone git@github.com:tomalrussell/snkit.git
 
-Maybe set up a virtualenv or conda environment, as you wish. Then install `snkit` in editable
-mode, with development packages:
+Maybe set up a virtualenv or conda environment, as you wish. Install a
+[Rust toolchain](https://rustup.rs), which is needed to build the kernel. Then install
+`snkit` in editable mode, with development packages:
 
     pip install -e .[dev]
+
+Run that again after changing any Rust code in `kernel/`.
 
 Run the tests:
 
@@ -176,10 +179,8 @@ network = snkit.link_nodes_to_edges(network)          # connect the depot to the
 | tidy | `merge_edges`, `simplify_edges`, `drop_duplicate_edges`, `label_components` |
 | work with several networks | `combine`, `stitch`, `union`, `intersection`, `difference` |
 
-These functions run on a kernel that works on plain arrays. It comes in NumPy, and
-optionally in Rust: build and install [`kernel/`](kernel/README.md) and `snkit` will use it
-for the heaviest steps, several times faster and in less memory. The older functions in
-`snkit.network` are built on the same kernel.
+These functions, and the older ones in `snkit.network`, run on a kernel written in Rust
+that works on plain arrays and is compiled into the package ([`kernel/`](kernel/README.md)).
 
 Each function's documentation has a small example. The
 [design document](docs/source/design.md) explains the ideas, with a worked example of every

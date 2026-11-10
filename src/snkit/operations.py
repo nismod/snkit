@@ -118,7 +118,7 @@ def _split(
     node = np.asarray(node, dtype=np.int64)
     measure = np.asarray(measure, dtype=float)
     if seg is None:
-        seg = K.locate_segment(arrays.running, arrays.offsets, edge, measure)
+        seg = arrays.locate(edge, measure)[0]
     else:
         seg = np.clip(seg, arrays.offsets[edge], arrays.offsets[edge + 1] - 2)
     # a cut at an end that names the node already there changes nothing
@@ -146,8 +146,7 @@ def _split(
     table[FROM] = node_ids[src]
     table[TO] = node_ids[dst]
     if extensive:
-        seglen = K.segment_lengths(coords, offsets)
-        length = np.add.reduceat(seglen, offsets[:-1])
+        length = K.line_measures(coords, offsets)[2]
         total = np.bincount(parent, weights=length, minlength=arrays.m)[parent]
         pieces = np.bincount(parent, minlength=arrays.m)[parent]
         share = np.where(total > 0, length / np.where(total > 0, total, 1), 1 / pieces)
@@ -202,10 +201,7 @@ def _merge_groups(
         offsets = arrays.offsets
     else:
         coords, offsets = K.extend_ends(arrays.coords, arrays.offsets, xy, src, dst)
-    if arrays.m:
-        new_length = np.add.reduceat(K.segment_lengths(coords, offsets), offsets[:-1])
-    else:
-        new_length = np.zeros(0)
+    new_length = K.line_measures(coords, offsets)[2]
     collapsed = (src == dst) & (arrays.src != arrays.dst)
     collapsed &= (arrays.length <= tolerance) | (new_length == 0)
     keep = ~collapsed
@@ -429,8 +425,7 @@ def split_edges(
     near_end = fresh & ((measure <= tolerance) | (measure >= arrays.length[edge] - tolerance))
     edge, measure, node = edge[~near_end], measure[~near_end], node[~near_end]
     fresh = node < 0
-    on_line = shapely.line_interpolate_point(arrays.lines[edge[fresh]], measure[fresh])
-    new_xy, index = _cluster(shapely.get_coordinates(on_line).reshape(-1, 2), tolerance)
+    new_xy, index = _cluster(arrays.locate(edge[fresh], measure[fresh])[2], tolerance)
     node[fresh] = arrays.n + index
     out = _add_nodes(network, new_xy)
     out, lineage = _split(out, arrays, edge, measure, node, None, extensive, np.concatenate([arrays.xy, new_xy]))

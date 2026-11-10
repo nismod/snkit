@@ -87,10 +87,21 @@ class Lines:
         self.lines = lines
         self.coords, self.offsets = to_ragged(lines)
         self.m = len(lines)
-        self.seglen = K.segment_lengths(self.coords, self.offsets)
-        self.running = K.running_length(self.seglen)
-        self.measure = K.measures(self.running, self.offsets)
-        self.length = self.measure[self.offsets[1:] - 1] if self.m else np.zeros(0, dtype=float)
+        self.seglen, self.measure, self.length = K.line_measures(self.coords, self.offsets)
+
+    def place(self, vertex: Any, frac: Any) -> Any:
+        """Distance along its line of a place given by vertex and fraction"""
+        return self.measure[vertex] + frac * self.seglen[vertex]
+
+    def end(self, line: Any, vertex: Any, frac: Any) -> Any:
+        """Whether a place is the start (-1) or the end (1) of its line, or neither (0)"""
+        at_start = (vertex == self.offsets[line]) & (frac == 0)
+        at_end = (vertex == self.offsets[line + 1] - 1) | ((vertex == self.offsets[line + 1] - 2) & (frac == 1))
+        return np.where(at_start, -1, np.where(at_end, 1, 0))
+
+    def locate(self, line: Any, at: Any) -> Any:
+        """The vertex, fraction and coordinate of places given distances along lines"""
+        return K.locate(self.coords, self.offsets, self.seglen, self.measure, line, at)
 
 
 class Arrays(Lines):
@@ -403,16 +414,7 @@ def from_nodes_and_edges(
     xy = shapely.get_coordinates(points).reshape(-1, 2)
     coords, offsets = to_ragged(geometry_array(edge_table))
     ends = _edge_ends(coords, offsets)
-    attached = np.full(len(ends), -1, dtype=np.int64)
-    if len(points) and len(ends):
-        tree = shapely.STRtree(points)
-        end_idx, node_idx = tree.query(shapely.points(ends), predicate="dwithin", distance=tolerance)
-        gap = np.hypot(*(ends[end_idx] - xy[node_idx]).T)
-        order = np.lexsort((node_idx, gap, end_idx))
-        end_idx, node_idx = end_idx[order], node_idx[order]
-        nearest = np.ones(len(end_idx), dtype=bool)
-        nearest[1:] = end_idx[1:] != end_idx[:-1]
-        attached[end_idx[nearest]] = node_idx[nearest]
+    attached = K.nearest_points(ends, xy, tolerance)
 
     loose = attached < 0
     new_xy, new_index = _distinct(ends[loose])

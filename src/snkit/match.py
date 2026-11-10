@@ -98,39 +98,20 @@ def node_edge_pairs(
     chosen = np.arange(arrays.n)
     if nodes is not None:
         chosen = chosen[np.asarray(nodes, dtype=bool)]
-    node = edge = np.zeros(0, dtype=np.int64)
-    if len(chosen) and arrays.m:
-        tree = shapely.STRtree(arrays.lines)
-
-        def within(candidates: Any, distance: float) -> Any:
-            found, e = tree.query(arrays.points[candidates], predicate="dwithin", distance=distance)
-            n = candidates[found]
-            other = (arrays.src[e] != n) & (arrays.dst[e] != n)
-            return n[other], e[other]
-
-        if tolerance is not None:
-            node, edge = within(chosen, tolerance)
-        else:
-            found, e = tree.query_nearest(arrays.points[chosen], all_matches=False)
-            n = chosen[found]
-            other = (arrays.src[e] != n) & (arrays.dst[e] != n)
-            node, edge = n[other], e[other]
-            # a node whose nearest edge is one of its own: widen the search in steps
-            pending = np.setdiff1d(chosen, node)
-            low, high = arrays.coords.min(axis=0), arrays.coords.max(axis=0)
-            reach = float(np.hypot(*(high - low))) + 1.0
-            radius = reach / np.sqrt(arrays.m + 1)
-            while len(pending) and radius <= 4 * reach:
-                n, e = within(pending, radius)
-                node, edge = np.concatenate([node, n]), np.concatenate([edge, e])
-                pending = np.setdiff1d(pending, n)
-                radius *= 4
-
-    lines, points = arrays.lines[edge], arrays.points[node]
-    measure = shapely.line_locate_point(lines, points)
-    xy = shapely.get_coordinates(shapely.line_interpolate_point(lines, measure)).reshape(-1, 2)
-    length = shapely.length(lines)
-    end = np.where(measure <= 0, -1, np.where(measure >= length, 1, 0))
+    if tolerance is not None and how == "all":
+        point, edge, vertex, frac, xy, distance = K.points_near_lines(
+            arrays.xy[chosen], arrays.coords, arrays.offsets, tolerance
+        )
+        node = chosen[point]
+        other = (arrays.src[edge] != node) & (arrays.dst[edge] != node)
+        node, edge, vertex, frac, xy, distance = (a[other] for a in (node, edge, vertex, frac, xy, distance))
+    else:
+        point, edge, vertex, frac, xy, distance = K.nearest_lines(
+            arrays.xy[chosen], arrays.coords, arrays.offsets, tolerance, chosen, arrays.src, arrays.dst
+        )
+        node = chosen[point]
+    measure = arrays.place(vertex, frac)
+    end = arrays.end(edge, vertex, frac)
     matches = pd.DataFrame(
         {
             "node": node,
@@ -138,7 +119,7 @@ def node_edge_pairs(
             "measure": measure,
             "x": xy[:, 0],
             "y": xy[:, 1],
-            "distance": np.hypot(*(xy - arrays.xy[node]).T),
+            "distance": distance,
             "end": end,
         }
     )
@@ -219,7 +200,7 @@ def crossing_events(arrays: Lines, end_to_end: bool = False) -> pd.DataFrame:
     if len(seg_a) == 0:
         return empty
 
-    owner = K.vertex_edge(offsets)
+    owner = np.repeat(np.arange(arrays.m), np.diff(offsets))
     data: Dict[str, Any] = {}
     for side, seg, frac in (("a", seg_a, t), ("b", seg_b, u)):
         edge = owner[seg]

@@ -1,6 +1,6 @@
 [build-system]
-requires = ["hatchling", "hatch-vcs"]
-build-backend = "hatchling.build"
+requires = ["maturin>=1.5,<2"]
+build-backend = "maturin"
 
 [project]
 name = "snkit"
@@ -32,17 +32,15 @@ igraph = ["python-igraph>=1.0"]
 Homepage = "https://snkit.readthedocs.io/en/latest/"
 Source = "https://github.com/tomalrussell/snkit"
 
-[tool.hatch.version]
-source = "vcs"
-
-[tool.hatch.build.hooks.vcs]
-version-file = "src/snkit/_version.py"
-
-[tool.hatch.build.targets.sdist]
-include = ["/src"]
+[tool.maturin]
+# the kernel is a Rust crate in kernel/, built into the package as snkit._native;
+# the package version is the version of that crate
+manifest-path = "kernel/Cargo.toml"
+python-source = "src"
+module-name = "snkit._native"
+features = ["python"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
 addopts = "--cov=snkit --cov-report=term-missing"
 
 [tool.coverage.run]

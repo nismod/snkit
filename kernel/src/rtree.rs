@@ -124,6 +124,78 @@ impl PackedRTree {
     }
 }
 
+/// An entry in the queue of a nearest search: a distance, then boxes before
+/// exact distances, then position, so that ties go to the lowest position.
+#[derive(PartialEq)]
+pub struct Candidate(f64, bool, u32);
+
+impl Eq for Candidate {}
+
+impl Ord for Candidate {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // reversed: the heap gives the largest, and the nearest is wanted
+        other
+            .0
+            .total_cmp(&self.0)
+            .then(other.1.cmp(&self.1))
+            .then(other.2.cmp(&self.2))
+    }
+}
+
+impl PartialOrd for Candidate {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+pub type Queue = std::collections::BinaryHeap<Candidate>;
+
+impl PackedRTree {
+    /// Find the item nearest to a point, no further than `max_distance`.
+    ///
+    /// `distance` gives the true distance from the point to an item, or
+    /// `None` to pass over it. Among items equally near, the one earliest in
+    /// the input is returned. `queue` is scratch space, reused between calls.
+    pub fn nearest(
+        &self,
+        point: [f64; 2],
+        max_distance: f64,
+        queue: &mut Queue,
+        mut distance: impl FnMut(u32) -> Option<f64>,
+    ) -> Option<(u32, f64)> {
+        if self.num_items == 0 {
+            return None;
+        }
+        queue.clear();
+        queue.push(Candidate(0.0, false, (self.boxes.len() - 1) as u32));
+        while let Some(Candidate(d, exact, pos)) = queue.pop() {
+            if exact {
+                return Some((pos, d));
+            }
+            let pos = pos as usize;
+            if pos < self.num_items {
+                let item = self.indices[pos];
+                if let Some(d) = distance(item).filter(|&d| d <= max_distance) {
+                    queue.push(Candidate(d, true, item));
+                }
+                continue;
+            }
+            let first = self.indices[pos] as usize;
+            let level_end = self.level_bounds[self.level_bounds.partition_point(|&bound| bound <= first)];
+            for child in first..(first + NODE_SIZE).min(level_end) {
+                let b = &self.boxes[child];
+                let dx = (b[0] - point[0]).max(point[0] - b[2]).max(0.0);
+                let dy = (b[1] - point[1]).max(point[1] - b[3]).max(0.0);
+                let d = dx.hypot(dy);
+                if d <= max_distance {
+                    queue.push(Candidate(d, false, child as u32));
+                }
+            }
+        }
+        None
+    }
+}
+
 /// Position along a Hilbert curve of a point on a 2^16 by 2^16 grid.
 fn hilbert(x: u32, y: u32) -> u32 {
     let (mut x, mut y) = (x.min(65535), y.min(65535));
@@ -156,6 +228,36 @@ mod tests {
                 !(q[2] < b[0] || q[3] < b[1] || q[0] > b[2] || q[1] > b[3])
             })
             .collect()
+    }
+
+    #[test]
+    fn nearest_matches_brute_force() {
+        let mut state = 7u64;
+        let mut next = || {
+            state = state
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            ((state >> 33) as f64) / ((1u64 << 31) as f64)
+        };
+        let points: Vec<[f64; 2]> = (0..3000)
+            .map(|_| [(next() * 50.0).round(), (next() * 50.0).round()])
+            .collect();
+        let items: Vec<Box2> = points.iter().map(|p| [p[0], p[1], p[0], p[1]]).collect();
+        let tree = PackedRTree::new(&items);
+        let mut queue = Queue::new();
+        for _ in 0..500 {
+            let q = [next() * 60.0 - 5.0, next() * 60.0 - 5.0];
+            let far = |i: u32| (points[i as usize][0] - q[0]).hypot(points[i as usize][1] - q[1]);
+            // pass over every third item, to test that too
+            let found = tree.nearest(q, f64::INFINITY, &mut queue, |i| (i % 3 != 0).then(|| far(i)));
+            let expected = (0..points.len() as u32)
+                .filter(|i| i % 3 != 0)
+                .map(|i| (far(i), i))
+                .min_by(|x, y| x.partial_cmp(y).unwrap())
+                .map(|(d, i)| (i, d));
+            assert_eq!(found, expected);
+            assert_eq!(tree.nearest(q, -1.0, &mut queue, |i| Some(far(i))), None);
+        }
     }
 
     #[test]

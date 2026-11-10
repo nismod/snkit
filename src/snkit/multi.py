@@ -6,7 +6,6 @@ from typing import Any, Dict, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
-import shapely
 
 from snkit import _kernel as K
 from snkit.core import (
@@ -190,8 +189,7 @@ def _overlay(a: Network, b: Network, tolerance: float, split: bool) -> Tuple[Net
         measure = np.concatenate([overlaps[c].to_numpy(dtype=float) for c in ("start_a", "end_a", "start_b", "end_b")])
         interior = (measure > tolerance) & (measure < arrays.length[edge] - tolerance)
         edge, measure = edge[interior], measure[interior]
-        on_line = shapely.line_interpolate_point(arrays.lines[edge], measure)
-        new_xy, index = _distinct(shapely.get_coordinates(on_line).reshape(-1, 2))
+        new_xy, index = _distinct(arrays.locate(edge, measure)[2])
         new_side = np.empty(len(new_xy), dtype=object)
         new_side[index] = side[edge]
         both = _add_nodes(both, new_xy)

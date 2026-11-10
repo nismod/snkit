@@ -1,6 +1,6 @@
 # Design: a spatial network operations API
 
-**Status: implemented**, in Python with an optional compiled kernel in Rust. The existing
+**Status: implemented**, as a Python package with its kernel in Rust. The existing
 `snkit.network` functions are rebuilt on the same kernel. This document sets out the concepts, the
 Python API with small examples, and the plan for testing, performance and implementation in
 other languages. It builds on what `snkit` already did and on the open issues it references
@@ -491,9 +491,9 @@ but it is the slowest part of the library and its failure modes are silent.
 5. **Decide with robust tests, construct with ordinary arithmetic.** "Do these segments
    cross?" should use exact orientation predicates, so the decision is consistent whichever
    way round it is asked. The crossing coordinate itself is rounded, which is harmless given
-   (2). The Rust kernel uses exact predicates. The Python reference kernel uses plain
-   floating-point tests. Both put each pair of segments into a fixed order and direction
-   first, so results do not depend on the order of rows or the direction of edges.
+   (2). The kernel uses exact predicates, and puts each pair of segments into a fixed order
+   and direction first, so results do not depend on the order of rows or the direction of
+   edges.
 
 ### Known hard cases and the stance on each
 
@@ -554,59 +554,67 @@ table. This one decision gives:
   DuckDB, JavaScript);
 - a narrow interface to reimplement: arrays in, arrays out, no object model.
 
-There are two implementations of the kernel, tested against each other:
+The kernel is written in Rust, in the `kernel` directory, and compiled into the Python
+package as `snkit._native`. It has its own spatial index (a static R-tree packed along a
+Hilbert curve), exact orientation predicates and parallel search, and depends on no
+geometry library. `snkit/_kernel.py` is only an adapter that hands it arrays of the right
+type.
 
-- `snkit/_kernel.py`, in NumPy: the reference, always available. It borrows its spatial
-  index from Shapely.
-- `kernel/`, in Rust, published as the Python package `snkit-kernel`: its own spatial
-  index, exact orientation predicates, parallel search. If it is installed, `snkit` uses
-  it; `SNKIT_KERNEL=python` or `=native` forces the choice.
+| Kernel function | Does |
+| --- | --- |
+| `components`, `group_index` | Connected components by union-find, and numbering them |
+| `line_measures`, `locate` | Distances along lines; the place a given distance along |
+| `split` | Cut edges at places along them |
+| `sync_ends`, `extend_ends` | Keep edge ends exactly on their nodes |
+| `segment_crossings` | Where line segments meet |
+| `point_pairs`, `nearest_points` | Points near each other |
+| `points_near_lines`, `nearest_lines` | Lines near each point, and the nearest place on them |
 
-The Rust kernel covers `components`, `split`, `segment_crossings` and `point_pairs`. The
-rest of the reference kernel is cheap arithmetic that NumPy already does in bulk.
+There was first a reference implementation of the kernel in NumPy, borrowing its index
+from Shapely. The Rust kernel was checked against it function by function, and on whole
+networks to the last bit, before the NumPy version was removed. The kernel is now tested
+against answers worked out the slow way (`tests/test_kernel.py`) and by its own unit tests
+(`cargo test` in `kernel/`).
 
-Both give the same network, to the last bit, on the tests: where edges cross is *decided*
-with exact predicates in Rust and plain floating point in NumPy, but the crossing
-coordinate is *computed* by the same arithmetic in both, written out in a fixed order.
-They can differ only where the NumPy version misjudges a near-degenerate case.
+Shapely is still used for three things the kernel does not do: converting geometry to and
+from arrays, `simplify_edges`, and the buffer-and-intersect step of `match_edges`.
 
 ### Measurements
 
 All on one machine with 4 cores and 15 GB, one run each, in seconds.
 
 **The functions of `snkit.network`, before and after being rebuilt on the kernel**
-(`benchmarks/bench_legacy.py`, 10 thousand edges, Python kernel):
+(`benchmarks/bench_legacy.py`, 10 thousand edges):
 
 | Function | Before | After |
 | --- | --- | --- |
-| `split_edges_at_nodes` | 30.8 | 0.03 |
-| `link_nodes_to_nearest_edge` | 28.8 | 0.10 |
+| `split_edges_at_nodes` | 30.8 | 0.01 |
+| `link_nodes_to_nearest_edge` | 28.8 | 0.06 |
 | `merge_edges` | 19.1 | 0.06 |
-| `split_edges_at_intersections` | 5.6 | 0.04 |
-| `add_topology` | 2.1 | 0.05 |
+| `split_edges_at_intersections` | 5.6 | 0.03 |
+| `add_topology` | 2.1 | 0.02 |
 | `add_endpoints` | 0.20 | 0.03 |
 
 The old functions grew faster than linearly, so the gap widens with size: after the rewrite
-the whole sequence takes about 4 s at 100 thousand edges.
+the whole sequence takes about 2 s at 100 thousand edges.
 
 **The operations of the new API on tables** (`benchmarks/bench.py`, a grid that becomes one
 million edges once split at its 600 thousand crossings):
 
-| Operation | Python kernel | Rust kernel |
+| Operation | NumPy kernel (removed) | Rust kernel |
 | --- | --- | --- |
-| `split_edges_at_crossings` | 12.1 | 1.9 |
-| `link_nodes_to_edges` (10% as many points) | 4.0 | 4.0 |
-| `merge_nodes` | 2.4 | 1.5 |
-| `split_edges_at_nodes` | 5.5 | 5.5 |
+| `split_edges_at_crossings` | 12.1 | 2.0 |
+| `link_nodes_to_edges` (10% as many points) | 4.0 | 2.5 |
+| `merge_nodes` | 2.4 | 1.3 |
+| `split_edges_at_nodes` | 5.5 | 2.0 |
 | `merge_edges` | 1.1 | 1.1 |
-| `simplify_edges` | 25.6 | 3.0 |
-| `label_components` | 4.7 | 0.6 |
+| `simplify_edges` | 25.6 | 2.8 |
+| `label_components` | 4.7 | 0.5 |
 | peak memory | 3.6 GB | 1.5 GB |
 
-The operations that did not speed up spend their time matching nodes to edges, which still
-goes through Shapely, and in building tables.
+What time remains is mostly spent building tables and geometry objects around the kernel.
 
-**The Rust kernel on arrays alone** (`benchmarks/bench_kernel.py`: random three-segment
+**The kernel on arrays alone** (`benchmarks/bench_kernel.py`: random three-segment
 lines, find crossings, cut, label components, find close nodes):
 
 | Lines in | Edges out | Crossings found in | Whole run | Peak memory |
@@ -665,18 +673,25 @@ Neither has been run at that size; the largest run here is 52 million edges.
 
 ### Stages
 
-1. *Reference implementation in Python* (done).
-2. *Existing functions rebuilt on it* (done; section 9).
-3. *Rust kernel behind the same interface* (done for the four functions above, with
-   bindings for Python).
-4. *Conformance cases and benchmarks*: the benchmark scripts exist; conformance cases as
-   data files are still to write. For now the two kernels are tested against each other
-   on generated inputs (`tests/test_kernel.py`).
-5. *Node-to-edge and edge-to-edge matching in the kernel*, which removes the remaining
-   use of Shapely's index and of per-feature geometry objects in the hot paths.
-6. *Array-backed networks and tiled, out-of-core operation*, as above.
-7. *Other language front ends* - R through extendr, the browser through WebAssembly -
+1. *Reference implementation in Python* (done, and since removed).
+2. *Existing functions rebuilt on the kernel* (done; section 9).
+3. *Kernel in Rust* (done), now the only implementation.
+4. *Array-backed networks*: keep geometry in arrays from file to file, so that the table
+   layer stops being the limit on size. **This is the next step.**
+5. *Tiled, out-of-core operation*, with adaptive tiles, as above.
+6. *Conformance cases* as data files, which a front end in any language can run.
+7. *The remaining geometry in the kernel*: simplification and edge-to-edge matching, which
+   would remove the last per-feature use of Shapely.
+8. *Other language front ends* - R through extendr, the browser through WebAssembly -
    which are thin: table in, kernel call, `take`, table out.
+
+### Packaging
+
+Because the kernel is compiled, `snkit` is no longer a pure-Python package. It is built
+with maturin; the version number is the one in `kernel/Cargo.toml`. One wheel per platform
+serves every Python version from 3.9 (the stable ABI). Installing from source needs a Rust
+toolchain. Releases need wheels built for each platform: `kernel/workflows/package.yml` is
+a workflow for that, to replace `.github/workflows/package.yml`.
 
 ## 9. Migration from the current API
 
@@ -723,26 +738,26 @@ How the old names map to the new:
 | `merge_edges` | same name; `by`, `keep`, `directed` |
 | `get_connected_components`, `add_component_ids` | `label_components`, without requiring networkx |
 
-## 10. Open questions
+## 10. Decisions
 
-Each has a recommendation, taken as the working assumption above.
+These were open questions; all are now decided, and the rest of this document follows them.
 
-1. **Where does this live?** New modules inside `snkit`, released as 2.0, with the old
-   functions as wrappers - rather than a separate package.
-2. **Is `tolerance` required?** Yes for operations whose whole purpose is approximate
-   (`merge_nodes`, `link_nodes`, `match_edges`); default `0` elsewhere.
-3. **Default node position on merge?** Centroid. The alternative, `first`, is
-   order-dependent unless a priority column is given.
-4. **Column names.** Fixed as `id`, `from_id`, `to_id` rather than configurable per call
-   (today `id_col` is honoured in some functions and hard-coded in others).
-5. **Id type.** *Decided:* unsigned integers. A supplied column is used as ids only if it
-   holds non-negative integers; otherwise it is converted to integers for the topology and
-   kept as an ordinary attribute (sections 4.1 and 5).
-6. **Directed networks.** A per-call `directed` flag where it matters, rather than a
+1. **Where this lives.** In `snkit` itself, as version 2.0, with the old functions kept and
+   rebuilt on the same kernel - not a separate package.
+2. **Tolerance.** Required for operations whose whole purpose is approximate
+   (`merge_nodes`, `link_nodes`, `match_edges`); `0` by default elsewhere. There is no
+   hidden tolerance.
+3. **Node position on merge.** The centroid by default; `position="first"` for the position
+   of the first member.
+4. **Column names.** Fixed as `id`, `from_id`, `to_id`, not configurable per call.
+5. **Id type.** Unsigned integers. A supplied column is used as ids only if it holds
+   non-negative integers; otherwise it is converted to integers for the topology and kept
+   as an ordinary attribute (sections 4.1 and 5).
+6. **Directed networks.** A `directed` flag on the operations where it matters, not a
    property stored on the `Network`.
-7. **Kernel language.** Rust, decided only after stage 2 shows what needs it.
-8. **Scope of edge matching.** Same-detail overlap only, as in section 4.9; anything harder
-   stays outside the library.
+7. **Kernel language.** Rust, as the only implementation of the kernel (section 8).
+8. **Scope of edge matching.** The same feature drawn twice at similar detail, as in
+   section 4.9; anything harder stays outside the library.
 
 ## 11. Implementation status
 
@@ -751,17 +766,16 @@ validation and the benchmark script.
 
 Not yet done, in rough order of value:
 
-- conformance cases as language-neutral data files (section 7);
-- node-to-edge and edge-to-edge matching in the Rust kernel (section 8);
 - array-backed networks and tiled, out-of-core operation (section 8);
-- snap-rounding to a coordinate grid (section 6); exact orientation predicates are in the
-  Rust kernel but not the Python one;
+- conformance cases as language-neutral data files (section 7);
+- simplification and edge-to-edge matching in the kernel (section 8);
+- snap-rounding to a coordinate grid (section 6);
 - Z coordinates carried through operations;
 - parent intervals in lineage (which stretch of the parent each piece of an edge covers);
 - joining `b`'s attributes onto shared edges in `union`;
 - front ends for other languages (section 8).
 
-Known limits of the reference implementation:
+Known limits:
 
 - `match_edges` finds stretches using a buffer of one edge, so the ends of a stretch are
   accurate to a small fraction of the tolerance, not exact.

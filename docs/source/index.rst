@@ -63,7 +63,7 @@ package to help clean spatial networks data.
 .. include:: ../../README.md
    :parser: myst_parser.sphinx_
    :start-line: 113
-   :end-line: 136
+   :end-line: 140
 
 
 .. toctree::

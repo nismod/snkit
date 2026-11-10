@@ -27,7 +27,10 @@ src/snkit/_version.py
 *.dbf
 *.shx
 *.cpg
-__init__.py
 
 # compiled kernel build output
 kernel/target
+
+# compiled kernel, built in place by an editable install
+*.so
+*.pyd

@@ -47,7 +47,7 @@ def main(lines):
     # a node at each end of each line
     src, dst = np.arange(lines) * 2, np.arange(lines) * 2 + 1
     size = coords.nbytes / 2**20
-    print(f"kernel: {K.BACKEND}; {lines:,} lines, {len(coords):,} vertices; input arrays {size:,.0f} MiB")
+    print(f"{lines:,} lines, {len(coords):,} vertices; input arrays {size:,.0f} MiB")
 
     seg_a, seg_b, t, u, xy = timed("segment_crossings", K.segment_crossings, coords, offsets)
     print(f"  {len(seg_a):,} crossings")

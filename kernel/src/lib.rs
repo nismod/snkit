@@ -9,11 +9,14 @@
 //!   and `m + 1` offsets, so that edge `e` has vertices
 //!   `offsets[e]..offsets[e + 1]` (the GeoArrow layout)
 //!
-//! The Python package `snkit` has a reference implementation of the same
-//! functions in `snkit/_kernel.py`; the two are tested against each other.
+//! The Python package `snkit` is a front end to this crate: it turns tables
+//! into these arrays, calls the kernel, and moves attributes by the positions
+//! the kernel returns.
 
 pub mod components;
 pub mod crossings;
+pub mod measures;
+pub mod nearest;
 pub mod points;
 pub mod rtree;
 pub mod split;

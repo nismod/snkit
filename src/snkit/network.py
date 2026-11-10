@@ -208,9 +208,10 @@ def add_topology(network: Network, id_col: str = "id") -> Network:
         edges["to_id"] = []
         return Network(nodes=network.nodes, edges=edges)
 
+    from snkit import _kernel as K
+
     ends = _line_ends(_geoms(edges))
-    tree = shapely.STRtree(_geoms(network.nodes))
-    ids = network.nodes[id_col].to_numpy()[tree.nearest(shapely.points(ends))]
+    ids = network.nodes[id_col].to_numpy()[K.nearest_points(ends, shapely.get_coordinates(_geoms(network.nodes)))]
     edges["from_id"] = ids[0::2]
     edges["to_id"] = ids[1::2]
     return Network(nodes=network.nodes, edges=edges)
@@ -294,9 +295,14 @@ def snap_nodes(network: Network, threshold: Optional[Number] = None) -> Network:
     """Move nodes (within threshold) to edges"""
     nodes = network.nodes.copy()
     if len(nodes) and len(network.edges):
-        points, lines = _geoms(nodes), _geoms(network.edges)
-        nearest_line = lines[shapely.STRtree(lines).nearest(points)]
-        snapped = shapely.line_interpolate_point(nearest_line, shapely.line_locate_point(nearest_line, points))
+        from snkit import _kernel as K
+        from snkit.core import to_ragged
+
+        points = _geoms(nodes)
+        lines = _geoms(network.edges)
+        coords, offsets = to_ragged(shapely.get_parts(lines[~shapely.is_missing(lines)]))
+        _, _, _, _, xy, _ = K.nearest_lines(shapely.get_coordinates(points), coords, offsets)
+        snapped = shapely.points(xy)
         if threshold is not None:
             snapped = np.where(shapely.distance(snapped, points) > threshold, points, snapped)
         nodes[geometry_column_name(nodes)] = geopandas.GeoSeries(snapped, index=nodes.index, crs=nodes.crs)
@@ -327,10 +333,13 @@ def split_edges_at_nodes(network: Network, tolerance: Number = 1e-9, chunk_size:
 
     lines = Lines(_geoms(edges))
     points = _geoms(network.nodes)
-    node, edge = shapely.STRtree(lines.lines).query(points, predicate="dwithin", distance=tolerance)
-    xy = shapely.get_coordinates(points)[node]
-    measure = shapely.line_locate_point(lines.lines[edge], points[node])
-    return Network(nodes=network.nodes, edges=_cut_edges(edges, lines, edge, measure, xy))
+    from snkit import _kernel as K
+
+    xy = shapely.get_coordinates(points)
+    node, edge, vertex, frac, _, _ = K.points_near_lines(xy, lines.coords, lines.offsets, tolerance)
+    return Network(
+        nodes=network.nodes, edges=_cut_edges(edges, lines, edge, lines.place(vertex, frac), xy[node], vertex)
+    )
 
 
 def split_edges_at_intersections(network: Network, tolerance: Optional[Number] = 1e-9) -> Network:
@@ -390,16 +399,18 @@ def link_nodes_to_edges_within(
     """Link nodes to all edges within some distance"""
     if len(network.nodes) == 0 or len(network.edges) == 0:
         return network
-    points, lines = _geoms(network.nodes), _geoms(network.edges)
-    node, edge = shapely.STRtree(lines).query(points, predicate="dwithin", distance=distance)
-    order = np.lexsort((edge, node))
-    node, edge = node[order], edge[order]
+    from snkit import _kernel as K
+    from snkit.core import Lines
+
+    lines = Lines(_geoms(network.edges))
+    xy = shapely.get_coordinates(_geoms(network.nodes))
+    node, edge, _, _, place, _ = K.points_near_lines(xy, lines.coords, lines.offsets, distance)
     if condition is not None:
         node_rows = list(network.nodes.itertuples(index=False))
         edge_rows = list(network.edges.itertuples())
         keep = [bool(condition(node_rows[n], edge_rows[e])) for n, e in zip(node, edge)]
-        node, edge = node[keep], edge[keep]
-    return _link(network, node, edge, tolerance)
+        node, place = node[keep], place[keep]
+    return _link(network, xy[node], place, tolerance)
 
 
 def link_nodes_to_nearest_edge(
@@ -409,25 +420,25 @@ def link_nodes_to_nearest_edge(
     """Link nodes to the nearest edge"""
     if len(network.nodes) == 0 or len(network.edges) == 0:
         return network
-    points, lines = _geoms(network.nodes), _geoms(network.edges)
-    node = np.arange(len(points))
-    edge = shapely.STRtree(lines).nearest(points)
+    from snkit import _kernel as K
+    from snkit.core import Lines
+
+    lines = Lines(_geoms(network.edges))
+    xy = shapely.get_coordinates(_geoms(network.nodes))
+    node, edge, _, _, place, _ = K.nearest_lines(xy, lines.coords, lines.offsets)
     if condition is not None:
         node_rows = list(network.nodes.itertuples(index=False))
         keep = [bool(condition(node_rows[n], network.edges.iloc[e])) for n, e in zip(node, edge)]
-        node, edge = node[keep], edge[keep]
-    return _link(network, node, edge, 1e-9)
+        node, place = node[keep], place[keep]
+    return _link(network, xy[node], place, 1e-9)
 
 
-def _link(network: Network, node: Any, edge: Any, tolerance: Number) -> Network:
-    """Add a node at the nearest place on each edge to each node, and an edge to it"""
-    points, lines = _geoms(network.nodes)[node], _geoms(network.edges)[edge]
-    nearest = shapely.line_interpolate_point(lines, shapely.line_locate_point(lines, points))
-    start, end = shapely.get_coordinates(points), shapely.get_coordinates(nearest)
+def _link(network: Network, start: Any, end: Any, tolerance: Number) -> Network:
+    """Add a node at each place, and an edge to it from the node it is nearest to"""
     apart = (start != end).any(axis=1)
     links = shapely.linestrings(np.stack([start[apart], end[apart]], axis=1))
 
-    new_nodes = matching_gdf_from_geoms(network.nodes, list(nearest[apart]))
+    new_nodes = matching_gdf_from_geoms(network.nodes, list(shapely.points(end[apart])))
     all_nodes = concat_dedup([network.nodes, new_nodes])
     new_edges = matching_gdf_from_geoms(network.edges, list(links))
     all_edges = concat_dedup([network.edges, new_edges])
@@ -474,7 +485,7 @@ def _cut_edges(
     first, last = lines.offsets[edge], lines.offsets[edge + 1] - 1
     at_end = (xy == lines.coords[first]).all(axis=1) | (xy == lines.coords[last]).all(axis=1)
     if seg is None:
-        seg = K.locate_segment(lines.running, lines.offsets, edge, measure)
+        seg = lines.locate(edge, measure)[0]
     else:
         seg = np.clip(seg, first, last - 1)
     table = pandas.DataFrame(
