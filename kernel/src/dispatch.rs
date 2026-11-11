@@ -56,6 +56,7 @@ impl Given<'_> {
             Value::Floats(v) | Value::Points(v) if v.iter().all(|x| x.fract() == 0.0) => {
                 Ok(v.iter().map(|&x| x as i64).collect())
             }
+            Value::Number(x) if x.fract() == 0.0 => Ok(vec![*x as i64]),
             _ => Err(format!("argument '{name}' must be an array of whole numbers")),
         }
     }
@@ -72,6 +73,7 @@ impl Given<'_> {
         match self.get(name)? {
             Value::Floats(v) | Value::Points(v) => Ok(v.clone()),
             Value::Ints(v) => Ok(v.iter().map(|&x| x as f64).collect()),
+            Value::Number(x) => Ok(vec![*x]),
             _ => Err(format!("argument '{name}' must be an array of numbers")),
         }
     }
@@ -89,6 +91,9 @@ impl Given<'_> {
     fn number(&self, name: &str) -> Result<f64, String> {
         match self.get(name)? {
             Value::Number(x) => Ok(*x),
+            // a language without single numbers passes an array of one
+            Value::Floats(v) if v.len() == 1 => Ok(v[0]),
+            Value::Ints(v) if v.len() == 1 => Ok(v[0] as f64),
             _ => Err(format!("argument '{name}' must be a number")),
         }
     }
@@ -106,6 +111,7 @@ impl Given<'_> {
         match self.0.get(name) {
             None => Ok(false),
             Some(Value::Bool(b)) => Ok(*b),
+            Some(Value::Bools(v)) if v.len() == 1 => Ok(v[0]),
             Some(_) => Err(format!("argument '{name}' must be true or false")),
         }
     }

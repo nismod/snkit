@@ -1,0 +1,23 @@
+[package]
+name = "snkit-wasm"
+version = "2.0.0-alpha.1"
+edition = "2021"
+license = "MIT"
+description = "The snkit kernel for JavaScript, as WebAssembly"
+repository = "https://github.com/nismod/snkit"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+snkit-kernel = { path = "../../kernel" }
+wasm-bindgen = "=0.2.100"
+js-sys = "0.3"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+
+# a crate of its own, not part of any workspace above it
+[workspace]

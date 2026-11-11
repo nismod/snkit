@@ -1,0 +1,4 @@
+rust/target
+*.o
+*.so
+*.dll

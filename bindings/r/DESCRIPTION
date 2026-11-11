@@ -1,0 +1,12 @@
+Package: snkit
+Title: Spatial Network Kernel
+Version: 2.0.0.9001
+Authors@R: person("Tom", "Russell", email = "tomalrussell@gmail.com", role = c("aut", "cre"))
+Description: The array kernel of the 'snkit' spatial networks toolkit: finding
+    where lines cross, cutting edges, matching points to lines, connected
+    components and more, on plain arrays of coordinates.
+License: MIT + file LICENSE
+Encoding: UTF-8
+SystemRequirements: Cargo (Rust's package manager), rustc
+Suggests: jsonlite
+Config/rextendr/version: 0.3.1

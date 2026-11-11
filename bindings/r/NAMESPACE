@@ -1,0 +1,3 @@
+export(snkit_call)
+export(snkit_functions)
+useDynLib(snkit, .registration = TRUE)

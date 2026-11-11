@@ -1,0 +1,21 @@
+[package]
+name = "snkitr"
+version = "2.0.0-alpha.1"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["staticlib"]
+name = "snkitr"
+
+[dependencies]
+extendr-api = "0.9"
+snkit-kernel = { path = "../../../../kernel" }
+
+[profile.release]
+lto = true
+codegen-units = 1
+
+# a crate of its own, not part of any workspace above it
+[workspace]

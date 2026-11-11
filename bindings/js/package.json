@@ -1,0 +1,15 @@
+{
+  "name": "snkit",
+  "version": "2.0.0-alpha.1",
+  "description": "The snkit spatial network kernel, as WebAssembly",
+  "license": "MIT",
+  "repository": "github:nismod/snkit",
+  "main": "pkg/node/snkit_wasm.js",
+  "browser": "pkg/web/snkit_wasm.js",
+  "types": "pkg/node/snkit_wasm.d.ts",
+  "files": ["pkg"],
+  "scripts": {
+    "build": "./build.sh",
+    "test": "node --test test/*.test.js"
+  }
+}
