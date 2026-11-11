@@ -726,15 +726,46 @@ size of the network.
   density had no upper bound took 3.6 GB at 10 million lines. Planning by an estimate of
   crossings as well would close that.
 - Scratch space is about three times the size of the source while the build runs.
-- Tiles are worked through one after another. They are independent within each of the
-  last two steps, so they can be run in parallel; that is not done yet.
-- Only this one pipeline runs out of core, and only with exact matching. Operations that
-  use a tolerance (merging near nodes, linking nodes to edges) need tiles that overlap by
-  the tolerance, and connected components need a pass over the whole; these are the next
-  to build, on the same plan, partition and scratch machinery. Until then, read a region
-  of the built network with `Built.read(bbox=...)` and work on it in memory.
+- Scratch files and both output files are written by one process; only the work on each
+  tile is shared out.
 - Node and edge positions are 64-bit throughout. Thirty-two bits would do up to 4 billion
   and halve the size of topology.
+
+### Other operations on a network on disk
+
+Three more things run on a network on disk (`snkit.tiled`), each giving the same result as
+its counterpart in memory:
+
+- **Tiles in parallel.** `build_network(..., workers=4)` works on several tiles at once,
+  each in a process of its own, and writes byte-for-byte the same files. Each tile finds
+  its nodes without knowing how many the tiles before it found - nodes are named by tile
+  and position until the counts are in - which is what makes the tiles independent.
+- **Merging near nodes**, `merge_nodes(network, destination, tolerance)`. Tiles overlap by
+  the tolerance: a node is given to every tile within tolerance of it, and a pair is
+  reported by the tile that holds the node with the lower id, so each pair is found once.
+  Chains of near nodes that run across tiles are joined afterwards, over the pairs. Only
+  the nodes that take part in a merge are then held in memory while both files are
+  rewritten a row group at a time. `build_network(..., tolerance=...)` builds and then
+  merges.
+- **Connected components**, `label_components(network, destination)`. Connectivity belongs
+  to the whole network and cannot be worked out in tiles, so the edges are read through
+  once, in batches, into a union-find that takes twelve bytes for each node.
+
+Measured on the network of 28 million nodes and 25 million edges built from 10 million
+lines above (one run each, on a machine that was also doing other work):
+
+| | Time | Peak memory |
+| --- | --- | --- |
+| Build, one tile at a time | 122 s | 0.5 GB |
+| Build, four tiles at once | 59 s | 0.6 GB, and up to 0.35 GB in each worker |
+| Merge nodes within 0.5 | 64 s | 0.9 GB |
+| Label components | 33 s | 0.9 GB |
+
+Still to do out of core: linking nodes to their nearest edges, and merging edges through
+nodes of degree two. Both follow the pattern of the build - find per tile, record for the
+tile an edge belongs to, then cut or join - and need tiles that overlap by the search
+distance. Until then, read a region of the network with `Built.read(bbox=...)` and work on
+it in memory.
 
 ### Stages
 
@@ -743,8 +774,8 @@ size of the network.
 3. *Kernel in Rust* (done), the only implementation.
 4. *Networks held in arrays, Arrow in and out* (done).
 5. *Building out of core in adaptive tiles* (done for creation and exact noding).
-6. *The other operations out of core*: tolerance-based matching with overlapping tiles,
-   connected components, and tiles in parallel. **This is the next step.**
+6. *Other operations out of core* (done for merging near nodes and connected components,
+   with tiles in parallel; linking nodes to edges and merging edges are still to do).
 7. *Conformance cases* as data files, which a front end in any language can run.
 8. *The remaining geometry in the kernel*: simplification and edge-to-edge matching, which
    would remove the last per-feature use of Shapely.
@@ -833,7 +864,7 @@ core, and the benchmark scripts.
 
 Not yet done, in rough order of value:
 
-- the other operations out of core, and tiles in parallel (section 8);
+- linking nodes to edges, and merging edges, out of core (section 8);
 - conformance cases as language-neutral data files (section 7);
 - simplification and edge-to-edge matching in the kernel (section 8);
 - snap-rounding to a coordinate grid (section 6);
