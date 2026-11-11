@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -53,7 +53,7 @@ def dumps(value: Any, indent: int = 0, in_list: bool = False) -> str:
     if isinstance(value, dict):
         if not value or in_list and all(_flat(item) for item in value.values()):
             return json.dumps(value, sort_keys=True)
-        items = [f'{pad}  {json.dumps(key)}: {dumps(value[key], indent + 1)}' for key in sorted(value)]
+        items = [f"{pad}  {json.dumps(key)}: {dumps(value[key], indent + 1)}" for key in sorted(value)]
         return "{\n" + ",\n".join(items) + f"\n{pad}}}"
     items = [f"{pad}  {dumps(item, indent + 1, True)}" for item in value]
     return "[\n" + ",\n".join(items) + f"\n{pad}]"
@@ -82,7 +82,7 @@ def net(
     *lines: str,
     points: Sequence[str] = (),
     edge_attrs: Sequence[Dict[str, Any]] = (),
-    node_attrs: Dict[int, Dict[str, Any]] = {},
+    node_attrs: Optional[Dict[int, Dict[str, Any]]] = None,
     first_node: int = 0,
     first_edge: int = 0,
 ) -> Dict[str, Any]:
@@ -101,7 +101,7 @@ def net(
         if shared and at in where:
             return where[at]
         number = first_node + len(nodes)
-        nodes.append({"id": number, "geometry": f"POINT ({at})", **node_attrs.get(number, {})})
+        nodes.append({"id": number, "geometry": f"POINT ({at})", **(node_attrs or {}).get(number, {})})
         if shared:
             where[at] = number
         return number
@@ -225,7 +225,7 @@ op(
     "invalid-dropped",
     "Unusable geometries, dropped",
     "A line of no length, an empty line and a missing geometry cannot be edges. "
-    "With invalid=\"drop\" they are left out; the edges that remain are numbered from 0.",
+    'With invalid="drop" they are left out; the edges that remain are numbered from 0.',
     {
         "lines": [
             L("0 0, 1 0", name="good"),
@@ -313,7 +313,7 @@ op(
     "collapsed-edge-dropped",
     "A line shorter than the tolerance",
     "Both ends of the short line are attached to the same node, which leaves it no length. "
-    "With invalid=\"drop\" it is left out.",
+    'With invalid="drop" it is left out.',
     {"points": [P("1 0")], "lines": [L("0 0, 0.9 0"), L("0.9 0, 1.1 0")]},
     tolerance=0.25,
     invalid="drop",
@@ -410,7 +410,7 @@ op(
     "match_nodes_to_edges",
     "nearest",
     "Nearest edge to each chosen node",
-    "With how=\"nearest\" each node chosen by the nodes mask gets one match, to its nearest edge, however far. "
+    'With how="nearest" each node chosen by the nodes mask gets one match, to its nearest edge, however far. '
     "Here the nearest place is the end of the edge, which is reported in this mode.",
     net("0 0, 2 0", "0 3, 2 3", points=["3 1", "1 2.5"]),
     how="nearest",
@@ -438,7 +438,7 @@ op(
     "match_nodes_to_edges",
     "two-edges",
     "A node near two edges",
-    "With how=\"all\" a node is matched to every edge within tolerance, nearest first.",
+    'With how="all" a node is matched to every edge within tolerance, nearest first.',
     net("0 0, 2 0", "0 1, 2 1", points=["1 0.25"]),
     tolerance=1,
 )
@@ -547,8 +547,7 @@ op(
     "merge_nodes",
     "centroid",
     "Two nodes that nearly meet",
-    "Nodes 1 and 2 become one node at their centroid, with the id of the first. "
-    "The ends of both edges move to it.",
+    "Nodes 1 and 2 become one node at their centroid, with the id of the first. The ends of both edges move to it.",
     net("0 0, 1 0", "1.05 0, 2 0"),
     tolerance=0.1,
     lineage=True,
@@ -557,7 +556,7 @@ op(
     "merge_nodes",
     "position-first",
     "Merged node at the position of the first",
-    "With position=\"first\" the merged node sits where the first of its members was, and only the other moves.",
+    'With position="first" the merged node sits where the first of its members was, and only the other moves.',
     net("0 0, 1 0", "1.5 0, 3 0"),
     tolerance=0.5,
     position="first",
@@ -566,7 +565,7 @@ op(
     "merge_nodes",
     "geometry-extend",
     "Edges extended, not moved",
-    "With geometry=\"extend\" each edge keeps its line and gains a vertex to reach the merged node.",
+    'With geometry="extend" each edge keeps its line and gains a vertex to reach the merged node.',
     net("0 0, 1 0", "1.5 0, 3 0"),
     tolerance=0.5,
     geometry="extend",
@@ -663,7 +662,7 @@ op(
     "link_nodes",
     "all",
     "Every pair within tolerance",
-    "With how=\"all\" (the default) every pair of nodes within tolerance is linked: all three sides of the triangle.",
+    'With how="all" (the default) every pair of nodes within tolerance is linked: all three sides of the triangle.',
     net(points=["0 0", "1 0", "1 2"]),
     tolerance=2.5,
 )
@@ -671,7 +670,7 @@ op(
     "link_nodes",
     "nearest",
     "Each node to its nearest only",
-    "With how=\"nearest\" each node is linked to its nearest neighbour within tolerance. "
+    'With how="nearest" each node is linked to its nearest neighbour within tolerance. '
     "Nodes 0 and 1 choose each other and node 2 chooses node 1, so the long side is left out.",
     net(points=["0 0", "1 0", "1 2"]),
     tolerance=2.5,
@@ -786,7 +785,7 @@ op(
     "split_edges_at_nodes",
     "move-node",
     "Moving the node, not the edge",
-    "With move=\"node\" the node is moved onto the edge, which keeps its line.",
+    'With move="node" the node is moved onto the edge, which keeps its line.',
     net("0 0, 2 0", points=["1 0.01"]),
     tolerance=0.05,
     move="node",
@@ -844,7 +843,7 @@ op(
     "link_nodes_to_edges",
     "all-within",
     "Every edge within a distance",
-    "With how=\"all\" the node is linked to every edge within max_distance: here to both.",
+    'With how="all" the node is linked to every edge within max_distance: here to both.',
     net("0 0, 2 0", "0 2, 2 2", points=["1 0.5"]),
     how="all",
     max_distance=2,
@@ -1042,8 +1041,7 @@ op(
     "simplify_edges",
     "no-new-crossing",
     "Simplifying must not create a crossing",
-    "Removing the bump from edge 0 would make it cross edge 1, which it goes around. "
-    "So edge 0 keeps its shape.",
+    "Removing the bump from edge 0 would make it cross edge 1, which it goes around. So edge 0 keeps its shape.",
     net("0 0, 2 0.5, 4 0", "2 -1, 2 0.25"),
     tolerance=1,
 )
@@ -1079,7 +1077,7 @@ op(
     "merge_edges",
     "by",
     "Only where attributes agree",
-    "With by=[\"kind\"] edges are merged only where they have the same kind. Node 1 joins two roads and is "
+    'With by=["kind"] edges are merged only where they have the same kind. Node 1 joins two roads and is '
     "removed; node 2 joins a road and a track and is kept.",
     net(
         "0 0, 1 0",
@@ -1293,7 +1291,7 @@ op(
     "stitch",
     "on-id",
     "Matching nodes by id",
-    "With on=\"id\" nodes with the same id in different networks are the same node, wherever they are. "
+    'With on="id" nodes with the same id in different networks are the same node, wherever they are. '
     "Node 1 of the second network is node 1 of the first, and its edge moves to the first's position.",
     {
         "networks": {

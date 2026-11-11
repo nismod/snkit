@@ -337,7 +337,10 @@ def _along(points: List[Tuple[float, float]], fraction: float) -> Tuple[Tuple[fl
     for (a, b), length in zip(zip(points, points[1:]), lengths):
         if length > 0 and target <= length:
             t = target / length
-            return (a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])), ((b[0] - a[0]) / length, (b[1] - a[1]) / length)
+            return (a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])), (
+                (b[0] - a[0]) / length,
+                (b[1] - a[1]) / length,
+            )
         target -= length
     a, b = points[-2], points[-1]
     length = math.dist(a, b) or 1.0
@@ -364,7 +367,6 @@ def _step(scale: float) -> float:
 
 def draw_panel(ax: Any, panel: Panel, scale: float) -> None:
     """Draw a panel. ``scale`` is points per data unit."""
-    import shapely
     from matplotlib import patheffects
     from matplotlib.patches import FancyArrowPatch
     from matplotlib.ticker import MultipleLocator
@@ -381,7 +383,9 @@ def draw_panel(ax: Any, panel: Panel, scale: float) -> None:
     ax.grid(True, color=GRID, linewidth=0.6)
     ax.set_axisbelow(True)
     if panel.message:
-        ax.text(0.5, 0.5, panel.message, transform=ax.transAxes, ha="center", va="center", fontsize=9, color=INK_SECONDARY)
+        ax.text(
+            0.5, 0.5, panel.message, transform=ax.transAxes, ha="center", va="center", fontsize=9, color=INK_SECONDARY
+        )
         if not panel.nodes and not panel.edges:
             ax.tick_params(labelbottom=False, labelleft=False)
             ax.grid(False)
@@ -444,14 +448,32 @@ def draw_panel(ax: Any, panel: Panel, scale: float) -> None:
         if panel.matcher == "match_nodes":
             a, b = positions[str(match["node_a"])], positions[str(match["node_b"])]
             ax.plot(*zip(a, b), color=INK, linewidth=1, linestyle=(0, (1, 2)), zorder=4)
-            ax.plot(*zip(a, b), linestyle="none", marker="o", markersize=10, markerfacecolor="none", markeredgecolor=INK, markeredgewidth=1, zorder=4)
+            ax.plot(
+                *zip(a, b),
+                linestyle="none",
+                marker="o",
+                markersize=10,
+                markerfacecolor="none",
+                markeredgecolor=INK,
+                markeredgewidth=1,
+                zorder=4,
+            )
         elif panel.matcher == "match_nodes_to_edges":
             a, b = positions[str(match["node"])], (match["x"], match["y"])
             ax.plot(*zip(a, b), color=INK, linewidth=1, linestyle=(0, (1, 2)), zorder=4)
             ax.plot([b[0]], [b[1]], marker="x", markersize=6, color=INK, markeredgewidth=1.4, zorder=6)
             obstacles.append(to_points(b))
         elif panel.matcher == "find_crossings":
-            ax.plot([match["x"]], [match["y"]], marker="o", markersize=9, markerfacecolor="none", markeredgecolor=INK, markeredgewidth=1.3, zorder=6)
+            ax.plot(
+                [match["x"]],
+                [match["y"]],
+                marker="o",
+                markersize=9,
+                markerfacecolor="none",
+                markeredgecolor=INK,
+                markeredgewidth=1.3,
+                zorder=6,
+            )
             obstacles.append(to_points((match["x"], match["y"])))
         elif panel.matcher == "match_edges":
             for side in "ab":
@@ -478,7 +500,9 @@ def draw_panel(ax: Any, panel: Panel, scale: float) -> None:
         choices = []
         for angle in (45, 135, 315, 225, 90, 270, 0, 180):
             reach = 9.5 + 1.5 * len(label) * abs(math.cos(math.radians(angle)))
-            choices.append((here[0] + reach * math.cos(math.radians(angle)), here[1] + reach * math.sin(math.radians(angle))))
+            choices.append(
+                (here[0] + reach * math.cos(math.radians(angle)), here[1] + reach * math.sin(math.radians(angle)))
+            )
         best_choice = max(choices, key=lambda point: min(_clearance(point, others), 14.0))
         placed.append(best_choice)
         ax.annotate(
