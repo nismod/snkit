@@ -1,0 +1,14 @@
+{
+  "expected": {
+    "distance": [3.0, 0.0]
+  },
+  "function": "hausdorff_distance",
+  "input": {
+    "a": [0, 0],
+    "b": [1, 0],
+    "coords": [[0, 0], [4, 0], [0, 1], [2, 3], [4, 1]],
+    "offsets": [0, 2, 5]
+  },
+  "note": "The larger of: the farthest that any vertex of one line is from the other line, and the reverse. The top of line 1, at (2, 3), is 3 from line 0. A line is 0 from itself.",
+  "title": "How far apart two lines are at most"
+}

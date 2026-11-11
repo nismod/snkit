@@ -1877,6 +1877,77 @@ kern(
     targets=[[2, 0], [0, 0], [1, 1]],
 )
 
+# --- simplify_lines ----------------------------------------------------------
+
+kern(
+    "simplify_lines",
+    "kinks",
+    "A small kink and a large one",
+    "A vertex is dropped if it lies within tolerance of the line between the vertices kept either side of it. "
+    "The small kink at (1, 0.1) goes; the large one at (3, 2) stays. End vertices are always kept.",
+    coords=[[0, 0], [1, 0.1], [2, 0], [3, 2], [4, 0]],
+    offsets=[0, 5],
+    tolerance=0.5,
+)
+kern(
+    "simplify_lines",
+    "two-vertices-and-a-ring",
+    "A line of two vertices, and a ring",
+    "A line of two vertices cannot be simplified. A closed ring keeps its first and last vertex and the vertex "
+    "farthest from them, so that it still has length.",
+    coords=[[9, 9], [9, 8], [0, 0], [4, 0], [4, 4], [0, 4], [0, 0]],
+    offsets=[0, 2, 7],
+    tolerance=3,
+)
+kern(
+    "simplify_lines",
+    "would-have-no-length",
+    "A line that would be left with no length",
+    "This line goes out a short way and comes back. Simplified, it would begin and end at one place with nothing "
+    "between, so it is left as it was.",
+    coords=[[5, 5], [5.2, 5], [5, 5]],
+    offsets=[0, 3],
+    tolerance=0.5,
+)
+
+# --- line_overlaps -----------------------------------------------------------
+
+kern(
+    "line_overlaps",
+    "alongside",
+    "One line running alongside part of another",
+    "Line 1 starts 4 along line 0 and 0.1 to one side, and carries on past its end. Line 0 comes within "
+    "tolerance of the start of line 1 a little before it is level with it (near_start); moved onto line 1 and "
+    "back, the stretch begins where the two face each other, 4 along line 0 and 0 along line 1.",
+    coords=[[0, 0], [10, 0], [4, 0.1], [14, 0.1]],
+    offsets=[0, 2, 4],
+    tolerance=0.5,
+)
+kern(
+    "line_overlaps",
+    "exactly-on-each-other",
+    "Lines that lie exactly on each other, running opposite ways",
+    "With a tolerance of 0 a stretch is where the two lines coincide. Line 1 runs the other way, so the "
+    "stretch from 1 to 3 along line 0 is from 2 to 4 along line 1, and is marked reversed.",
+    coords=[[0, 0], [2, 0], [3, 0], [5, 0], [3, 0], [1, 0]],
+    offsets=[0, 3, 6],
+    tolerance=0,
+)
+
+# --- hausdorff_distance ------------------------------------------------------
+
+kern(
+    "hausdorff_distance",
+    "two-lines",
+    "How far apart two lines are at most",
+    "The larger of: the farthest that any vertex of one line is from the other line, and the reverse. "
+    "The top of line 1, at (2, 3), is 3 from line 0. A line is 0 from itself.",
+    coords=[[0, 0], [4, 0], [0, 1], [2, 3], [4, 1]],
+    offsets=[0, 2, 5],
+    a=[0, 0],
+    b=[1, 0],
+)
+
 
 # ---------------------------------------------------------------------------
 

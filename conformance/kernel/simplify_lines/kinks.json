@@ -1,0 +1,14 @@
+{
+  "expected": {
+    "coords": [[0.0, 0.0], [2.0, 0.0], [3.0, 2.0], [4.0, 0.0]],
+    "offsets": [0, 4]
+  },
+  "function": "simplify_lines",
+  "input": {
+    "coords": [[0, 0], [1, 0.1], [2, 0], [3, 2], [4, 0]],
+    "offsets": [0, 5],
+    "tolerance": 0.5
+  },
+  "note": "A vertex is dropped if it lies within tolerance of the line between the vertices kept either side of it. The small kink at (1, 0.1) goes; the large one at (3, 2) stays. End vertices are always kept.",
+  "title": "A small kink and a large one"
+}

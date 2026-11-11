@@ -50,6 +50,20 @@ KERNEL_OUTPUTS = {
     "points_near_lines": ("point", "line", "vertex", "frac", "xy", "distance"),
     "nearest_lines": ("point", "line", "vertex", "frac", "xy", "distance"),
     "nearest_points": ("nearest",),
+    "simplify_lines": ("coords", "offsets"),
+    "line_overlaps": (
+        "a",
+        "b",
+        "near_start",
+        "near_end",
+        "start_a",
+        "end_a",
+        "start_b",
+        "end_b",
+        "reversed",
+        "distance",
+    ),
+    "hausdorff_distance": ("distance",),
 }
 
 

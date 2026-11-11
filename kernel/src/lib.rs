@@ -15,6 +15,7 @@
 
 pub mod components;
 pub mod crossings;
+pub mod dispatch;
 pub mod geoarrow;
 pub mod measures;
 pub mod nearest;

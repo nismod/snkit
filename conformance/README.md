@@ -167,6 +167,9 @@ A set of lines is two arrays: `coords`, the vertices of all lines one after anot
 | `points_near_lines` | `xy`, `coords`, `offsets`, `tolerance` | `point`, `line`, `vertex`, `frac`, `xy`, `distance` |
 | `nearest_lines` | `xy`, `coords`, `offsets`, `max_distance` (default none), `node`, `src`, `dst` (default none) | `point`, `line`, `vertex`, `frac`, `xy`, `distance` |
 | `nearest_points` | `xy`, `targets`, `max_distance` (default none) | `nearest` |
+| `simplify_lines` | `coords`, `offsets`, `tolerance` | `coords`, `offsets` |
+| `line_overlaps` | `coords`, `offsets`, `tolerance` | `a`, `b`, `near_start`, `near_end`, `start_a`, `end_a`, `start_b`, `end_b`, `reversed`, `distance` |
+| `hausdorff_distance` | `coords`, `offsets`, `a`, `b` | `distance` |
 
 What each output means is in the docstrings of `src/snkit/_kernel.py`. The functions of
 `snkit._native` that read Arrow streams have no cases here.

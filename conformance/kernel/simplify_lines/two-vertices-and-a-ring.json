@@ -1,0 +1,14 @@
+{
+  "expected": {
+    "coords": [[9.0, 9.0], [9.0, 8.0], [0.0, 0.0], [4.0, 4.0], [0.0, 0.0]],
+    "offsets": [0, 2, 5]
+  },
+  "function": "simplify_lines",
+  "input": {
+    "coords": [[9, 9], [9, 8], [0, 0], [4, 0], [4, 4], [0, 4], [0, 0]],
+    "offsets": [0, 2, 7],
+    "tolerance": 3
+  },
+  "note": "A line of two vertices cannot be simplified. A closed ring keeps its first and last vertex and the vertex farthest from them, so that it still has length.",
+  "title": "A line of two vertices, and a ring"
+}

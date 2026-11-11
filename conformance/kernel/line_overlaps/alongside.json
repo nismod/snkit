@@ -1,0 +1,22 @@
+{
+  "expected": {
+    "a": [0],
+    "b": [1],
+    "distance": [0.1],
+    "end_a": [10.0],
+    "end_b": [6.0],
+    "near_end": [10.0],
+    "near_start": [3.510102051443],
+    "reversed": [false],
+    "start_a": [4.0],
+    "start_b": [0.0]
+  },
+  "function": "line_overlaps",
+  "input": {
+    "coords": [[0, 0], [10, 0], [4, 0.1], [14, 0.1]],
+    "offsets": [0, 2, 4],
+    "tolerance": 0.5
+  },
+  "note": "Line 1 starts 4 along line 0 and 0.1 to one side, and carries on past its end. Line 0 comes within tolerance of the start of line 1 a little before it is level with it (near_start); moved onto line 1 and back, the stretch begins where the two face each other, 4 along line 0 and 0 along line 1.",
+  "title": "One line running alongside part of another"
+}
