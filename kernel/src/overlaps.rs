@@ -58,9 +58,11 @@ const CHUNK: usize = 1024;
 /// cross: it is for the caller to leave out those too short to matter.
 ///
 /// `reversed` says that the lines run opposite ways along the stretch.
-/// `distance` is the farthest that `a` strays from `b` between `start_a` and
-/// `end_a`, measured at those two places, at the vertices of `a` between
-/// them, and at the ends of the stretch if they lie between them.
+/// `distance` is how far `a` strays from `b`, measured at `start_a` and
+/// `end_a`, and at the ends of the stretch and the vertices of `a` within
+/// it where those lie between `start_a` and `end_a`. It is not measured
+/// where the interval of `a` reaches beyond the stretch, which it can where
+/// `a` leaves `b` and comes back.
 ///
 /// A line is not compared with itself. Stretches are sorted by `a`, then
 /// `b`, then `near_start`.
@@ -265,6 +267,8 @@ impl<'a> Lines<'a> {
             }
         }
         let (first, end) = (self.offsets[a] as usize, self.offsets[a + 1] as usize);
+        // the vertices of a that are within both the stretch and the interval
+        let (low, high) = (low.max(from), high.min(to));
         let inside = first + self.measure[first..end].partition_point(|&m| m < low);
         for v in (inside..end).take_while(|&v| self.measure[v] <= high) {
             distance = distance.max(self.nearest(b, self.vertex(v), queue).2);
@@ -273,7 +277,7 @@ impl<'a> Lines<'a> {
             a as u32,
             b as u32,
             [from, to],
-            [low, high],
+            [on_a[0].0.min(on_a[1].0), on_a[0].0.max(on_a[1].0)],
             [on_b[0].0.min(on_b[1].0), on_b[0].0.max(on_b[1].0)],
             reversed,
             distance,

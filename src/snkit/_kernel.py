@@ -228,9 +228,9 @@ def line_overlaps(coords: Any, offsets: Any, tolerance: float) -> Overlaps:
     that face each other, found by moving each end of the stretch to the
     nearest place on ``b`` and from there to the nearest place on ``a``;
     ``reversed``, whether the lines run opposite ways there; and ``distance``,
-    the furthest that ``a`` strays from ``b`` between ``start_a`` and
-    ``end_a``, measured at those places, at the vertices of ``a`` between
-    them, and at the ends of the stretch where they lie between them.
+    how far ``a`` strays from ``b``, measured at ``start_a`` and ``end_a``,
+    and at the ends of the stretch and the vertices of ``a`` within it where
+    those lie between ``start_a`` and ``end_a``.
 
     The facing intervals of lines that merely cross have no length: leaving
     out intervals too short to matter is for the caller.
