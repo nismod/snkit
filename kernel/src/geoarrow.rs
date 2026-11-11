@@ -126,7 +126,7 @@ pub fn bounds(parts: &Parts) -> Vec<f64> {
 fn decode(array: &ArrayRef, want: Want, parts: &mut Parts) -> Result<(), String> {
     let base = parts.rows;
     parts.rows += array.len() as i64;
-    let mut wkb = |bytes: Option<&[u8]>, row: i64, parts: &mut Parts| {
+    let wkb = |bytes: Option<&[u8]>, row: i64, parts: &mut Parts| {
         let before = parts.row.len();
         if bytes.is_none_or(|b| read_wkb(b, row, want, parts).is_none()) || parts.row.len() == before {
             // a geometry is all or nothing: undo any parts already taken from it
@@ -284,7 +284,7 @@ fn read_wkb_at(bytes: &[u8], at: &mut usize, row: i64, want: Want, parts: &mut P
         dims = if code >= 3000 { 4 } else { 3 };
         code %= 1000;
     }
-    let mut vertex = |at: &mut usize, parts: &mut Parts| -> Option<()> {
+    let vertex = |at: &mut usize, parts: &mut Parts| -> Option<()> {
         let (x, y) = (f64_at(at)?, f64_at(at)?);
         *at += 8 * (dims - 2);
         parts.coords.extend_from_slice(&[x, y]);

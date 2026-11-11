@@ -510,10 +510,13 @@ but it is the slowest part of the library and its failure modes are silent.
 
 - **Worked examples as tests.** Every example in section 4 is a test (`tests/test_api.py`),
   and every public function has a small example in its docstring, also run as a test.
-- **Shared conformance cases** (not yet written). Each case is a small file: operation,
-  parameters, input nodes and edges as WKT, expected output. They are data, not Python, so
-  every implementation in any language runs the same cases. This is the cross-language
-  contract.
+- **Shared conformance cases**, in the `conformance` directory. Each case is a small JSON
+  file: an operation or kernel function, its parameters, its input and the expected
+  result. They are data, not Python, so an implementation in any language can run the same
+  cases. There are 139 for the operations, which the Python package runs, and 45 for the
+  functions of the kernel, which the kernel itself, the Python package and the JavaScript
+  and R bindings all run. The operation cases are drawn, one figure each with a note on
+  what it shows, on the [examples page](examples.md), which is generated from the files.
 - **Property tests** over randomly generated networks:
   - invariants hold after every operation;
   - cleaning operations are idempotent;
@@ -576,9 +579,19 @@ networks to the last bit, before the NumPy version was removed. The kernel is no
 against answers worked out the slow way (`tests/test_kernel.py`) and by its own unit tests
 (`cargo test` in `kernel/`).
 
-Shapely is still used for three things the kernel does not do: converting geometry
-objects to and from arrays where GeoDataFrames come in and go out, `simplify_edges`, and
-the buffer-and-intersect step of `match_edges`.
+The kernel does all the geometry of the operations, including simplification
+(Douglas-Peucker), the distance between lines used to find duplicates, and finding where
+two lines run alongside each other. That last is now exact - each segment of one line is
+clipped against the region within tolerance of each segment of the other - where it used
+to go through a polygon approximating a buffer.
+
+**GEOS, and Shapely.** The kernel does not use GEOS, and that is deliberate now that
+bindings for R and JavaScript exist. A kernel that needed GEOS would need it built for
+WebAssembly, where it is large and awkward to ship, and would tie the R package to a system
+library; without it the kernel compiles to 350 KB of WebAssembly with nothing else to
+install. Shapely remains a dependency of the Python package only, for what it is good at:
+turning the geometry objects of a GeoDataFrame into arrays and back, in bulk, where
+GeoDataFrames come in and go out. Nothing between those two points uses it.
 
 ### Measurements
 
@@ -605,14 +618,14 @@ same network held in arrays:
 
 | Operation | GeoDataFrames | Arrays |
 | --- | --- | --- |
-| `split_edges_at_crossings` | 2.7 | 1.7 |
-| `link_nodes_to_edges` (10% as many points) | 3.9 | 2.5 |
-| `merge_nodes` | 2.6 | 1.2 |
-| `split_edges_at_nodes` | 3.1 | 1.8 |
-| `merge_edges` | 2.9 | 1.4 |
-| `simplify_edges` | 5.5 | 3.8 |
-| `label_components` | 2.1 | 0.6 |
-| peak memory | 1.8 GB | 1.3 GB |
+| `split_edges_at_crossings` | 2.8 | 1.7 |
+| `link_nodes_to_edges` (10% as many points) | 3.7 | 2.2 |
+| `merge_nodes` | 2.5 | 1.2 |
+| `split_edges_at_nodes` | 3.1 | 1.6 |
+| `merge_edges` | 3.0 | 1.3 |
+| `simplify_edges` | 2.8 | 1.5 |
+| `label_components` | 1.9 | 0.6 |
+| peak memory | 1.5 GB | 1.0 GB |
 
 The difference in time is the conversion of every geometry to and from objects at each
 call. (With the NumPy kernel that has since been removed, the same run took 12 s for
@@ -776,11 +789,19 @@ it in memory.
 5. *Building out of core in adaptive tiles* (done for creation and exact noding).
 6. *Other operations out of core* (done for merging near nodes and connected components,
    with tiles in parallel; linking nodes to edges and merging edges are still to do).
-7. *Conformance cases* as data files, which a front end in any language can run.
-8. *The remaining geometry in the kernel*: simplification and edge-to-edge matching, which
-   would remove the last per-feature use of Shapely.
-9. *Other language front ends* - R through extendr, the browser through WebAssembly.
-   With Arrow streams at the kernel's boundary these need no geometry code of their own.
+7. *Conformance cases* as data files (done; section 7), with a catalogue of examples drawn
+   from them.
+8. *The remaining geometry in the kernel* (done): simplification, line distance and
+   edge-to-edge matching.
+9. *Bindings for other languages* (done for the kernel): JavaScript through WebAssembly and
+   R through extendr, in `bindings/`. Each is one function that reaches every kernel
+   function by name, and each passes the kernel's conformance cases.
+10. *The operations themselves in the kernel.* The operations of section 4 combine kernel
+    functions with rules about ids, attributes and tolerances, and those rules are still
+    written in Python. Until they move into Rust, behind the same kind of entry point, the
+    other languages have the kernel but not `merge_nodes` or `split_edges_at_crossings`.
+    The 139 operation cases are the specification for that move. **This is the next step.**
+11. *What remains out of core*: linking nodes to edges, and merging edges.
 
 ### Packaging
 
@@ -859,24 +880,22 @@ These were open questions; all are now decided, and the rest of this document fo
 ## 11. Implementation status
 
 Implemented and tested: everything in section 4, the matchers, lineage, attribute rules,
-validation, networks held in arrays, Arrow and file reading and writing, building out of
-core, and the benchmark scripts.
+validation, networks held in arrays, Arrow and file reading and writing, building and
+working out of core, conformance cases, bindings to the kernel for JavaScript and R, and
+the benchmark scripts.
 
 Not yet done, in rough order of value:
 
 - linking nodes to edges, and merging edges, out of core (section 8);
-- conformance cases as language-neutral data files (section 7);
-- simplification and edge-to-edge matching in the kernel (section 8);
+- the operations themselves in the kernel, so that other languages have them (section 8);
 - snap-rounding to a coordinate grid (section 6);
 - Z coordinates carried through operations;
 - parent intervals in lineage (which stretch of the parent each piece of an edge covers);
 - joining `b`'s attributes onto shared edges in `union`;
-- front ends for other languages (section 8).
+- reading Arrow streams in the JavaScript and R bindings, which take plain arrays.
 
 Known limits:
 
-- `match_edges` finds stretches using a buffer of one edge, so the ends of a stretch are
-  accurate to a small fraction of the tolerance, not exact.
 - A crossing is snapped to a node only if that node is an end of one of the two edges
   crossing, not to any node that happens to be nearby.
 - Set operations merge matching nodes in chains, so two nodes of `a` that are each within
