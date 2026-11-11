@@ -1,0 +1,13 @@
+{
+  "expected": {
+    "a": [0, 1],
+    "b": [1, 2]
+  },
+  "function": "point_pairs",
+  "input": {
+    "tolerance": 1,
+    "xy": [[0, 0], [1, 0], [1, 0.5], [3, 0]]
+  },
+  "note": "Each pair once, lower position first, sorted. A pair exactly the tolerance apart is included.",
+  "title": "Pairs within a distance"
+}

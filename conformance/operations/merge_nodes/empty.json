@@ -1,0 +1,16 @@
+{
+  "expected": {
+    "edges": [],
+    "nodes": []
+  },
+  "input": {
+    "edges": [],
+    "nodes": []
+  },
+  "note": "An empty network gives an empty network.",
+  "operation": "merge_nodes",
+  "parameters": {
+    "tolerance": 1
+  },
+  "title": "An empty network"
+}

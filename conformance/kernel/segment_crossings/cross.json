@@ -1,0 +1,16 @@
+{
+  "expected": {
+    "frac_a": [0.5],
+    "frac_b": [0.5],
+    "seg_a": [0],
+    "seg_b": [2],
+    "xy": [[1.0, 1.0]]
+  },
+  "function": "segment_crossings",
+  "input": {
+    "coords": [[0, 0], [2, 2], [0, 2], [2, 0]],
+    "offsets": [0, 2, 4]
+  },
+  "note": "One meeting: the two segments, each named by the position of the vertex where it starts, the fraction along each, and the coordinate.",
+  "title": "Two segments that cross"
+}

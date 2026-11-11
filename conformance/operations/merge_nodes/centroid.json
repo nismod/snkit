@@ -1,0 +1,35 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1.025 0)", "id": 0, "to_id": 1},
+      {"from_id": 1, "geometry": "LINESTRING (1.025 0, 2 0)", "id": 1, "to_id": 3}
+    ],
+    "lineage": {
+      "edges": [[0, 0], [1, 1]],
+      "nodes": [[0, 0], [1, 1], [1, 2], [3, 3]]
+    },
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (1.025 0)", "id": 1},
+      {"geometry": "POINT (2 0)", "id": 3}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "to_id": 1},
+      {"from_id": 2, "geometry": "LINESTRING (1.05 0, 2 0)", "id": 1, "to_id": 3}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (1 0)", "id": 1},
+      {"geometry": "POINT (1.05 0)", "id": 2},
+      {"geometry": "POINT (2 0)", "id": 3}
+    ]
+  },
+  "note": "Nodes 1 and 2 become one node at their centroid, with the id of the first. The ends of both edges move to it.",
+  "operation": "merge_nodes",
+  "parameters": {
+    "tolerance": 0.1
+  },
+  "title": "Two nodes that nearly meet"
+}

@@ -1,0 +1,27 @@
+{
+  "expected": {
+    "matches": [
+      {"distance": 0.25, "edge": 0, "measure": 1.0, "node": 4, "x": 1.0, "y": 0.0},
+      {"distance": 0.75, "edge": 1, "measure": 1.0, "node": 4, "x": 1.0, "y": 1.0}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 0)", "id": 0, "to_id": 1},
+      {"from_id": 2, "geometry": "LINESTRING (0 1, 2 1)", "id": 1, "to_id": 3}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (2 0)", "id": 1},
+      {"geometry": "POINT (0 1)", "id": 2},
+      {"geometry": "POINT (2 1)", "id": 3},
+      {"geometry": "POINT (1 0.25)", "id": 4}
+    ]
+  },
+  "note": "With how=\"all\" a node is matched to every edge within tolerance, nearest first.",
+  "operation": "match_nodes_to_edges",
+  "parameters": {
+    "tolerance": 1
+  },
+  "title": "A node near two edges"
+}

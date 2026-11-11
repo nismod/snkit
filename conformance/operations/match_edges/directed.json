@@ -1,0 +1,24 @@
+{
+  "expected": {
+    "matches": []
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 10 0)", "id": 0, "to_id": 1},
+      {"from_id": 2, "geometry": "LINESTRING (14 0.1, 4 0.1)", "id": 1, "to_id": 3}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (10 0)", "id": 1},
+      {"geometry": "POINT (14 0.1)", "id": 2},
+      {"geometry": "POINT (4 0.1)", "id": 3}
+    ]
+  },
+  "note": "With directed=true only edges running the same way match, so there is nothing here.",
+  "operation": "match_edges",
+  "parameters": {
+    "directed": true,
+    "tolerance": 0.5
+  },
+  "title": "Opposite directions, directed"
+}

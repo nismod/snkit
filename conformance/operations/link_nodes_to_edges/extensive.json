@@ -1,0 +1,31 @@
+{
+  "expected": {
+    "edges": [
+      {"cost": 2.0, "from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 1, "name": "A1", "to_id": 3},
+      {"cost": 6.0, "from_id": 3, "geometry": "LINESTRING (1 0, 4 0)", "id": 2, "name": "A1", "to_id": 1},
+      {"cost": null, "from_id": 2, "geometry": "LINESTRING (1 1, 1 0)", "id": 3, "name": null, "to_id": 3}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (4 0)", "id": 1},
+      {"geometry": "POINT (1 1)", "id": 2},
+      {"geometry": "POINT (1 0)", "id": 3}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"cost": 8, "from_id": 0, "geometry": "LINESTRING (0 0, 4 0)", "id": 0, "name": "A1", "to_id": 1}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (4 0)", "id": 1},
+      {"geometry": "POINT (1 1)", "id": 2}
+    ]
+  },
+  "note": "Pieces of the split edge copy its attributes, with the extensive column shared by length. The linking edge is new and has null attributes.",
+  "operation": "link_nodes_to_edges",
+  "parameters": {
+    "extensive": ["cost"]
+  },
+  "title": "Attributes of the pieces and of the link"
+}

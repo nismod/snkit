@@ -1,0 +1,12 @@
+{
+  "expected": {
+    "group": [0, 0, 1, 2, 2],
+    "is_first": [true, false, true, true, false]
+  },
+  "function": "group_index",
+  "input": {
+    "labels": [0, 0, 2, 3, 3]
+  },
+  "note": "Groups are numbered from 0 in order of their first item, and the first item of each is marked.",
+  "title": "Labels to consecutive numbers"
+}

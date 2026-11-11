@@ -1,0 +1,41 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 1, "geometry": "LINESTRING (1 0, 2 0)", "id": 1, "to_id": 2}
+    ],
+    "nodes": [
+      {"geometry": "POINT (1 0)", "id": 1},
+      {"geometry": "POINT (2 0)", "id": 2}
+    ]
+  },
+  "input": {
+    "networks": {
+      "a": {
+        "edges": [
+          {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "to_id": 1},
+          {"from_id": 1, "geometry": "LINESTRING (1 0, 2 0)", "id": 1, "to_id": 2}
+        ],
+        "nodes": [
+          {"geometry": "POINT (0 0)", "id": 0},
+          {"geometry": "POINT (1 0)", "id": 1},
+          {"geometry": "POINT (2 0)", "id": 2}
+        ]
+      },
+      "b": {
+        "edges": [
+          {"from_id": 0, "geometry": "LINESTRING (1 0, 2 0)", "id": 0, "to_id": 1},
+          {"from_id": 1, "geometry": "LINESTRING (2 0, 3 0)", "id": 1, "to_id": 2}
+        ],
+        "nodes": [
+          {"geometry": "POINT (1 0)", "id": 0},
+          {"geometry": "POINT (2 0)", "id": 1},
+          {"geometry": "POINT (3 0)", "id": 2}
+        ]
+      }
+    }
+  },
+  "note": "Only a's edge that is also in b is kept, with its end nodes.",
+  "operation": "intersection",
+  "parameters": {},
+  "title": "Two networks with an edge in common"
+}

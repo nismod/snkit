@@ -1,0 +1,29 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 0)", "id": 0, "to_id": 1},
+      {"from_id": 1, "geometry": "LINESTRING (2 0, 0 0)", "id": 1, "to_id": 0}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (2 0)", "id": 1}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 0)", "id": 0, "to_id": 1},
+      {"from_id": 1, "geometry": "LINESTRING (2 0, 0 0)", "id": 1, "to_id": 0},
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 0)", "id": 2, "to_id": 1}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (2 0)", "id": 1}
+    ]
+  },
+  "note": "With directed=true an edge running the other way is not a duplicate. Edge 2 runs the same way as edge 0 and is dropped.",
+  "operation": "drop_duplicate_edges",
+  "parameters": {
+    "directed": true
+  },
+  "title": "Opposite directions, directed"
+}

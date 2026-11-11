@@ -1,0 +1,32 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "to_id": 1},
+      {"from_id": 1, "geometry": "LINESTRING (1 0, 3 0)", "id": 1, "to_id": 3}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (1 0)", "id": 1},
+      {"geometry": "POINT (3 0)", "id": 3}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "to_id": 1},
+      {"from_id": 2, "geometry": "LINESTRING (1.5 0, 3 0)", "id": 1, "to_id": 3}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (1 0)", "id": 1},
+      {"geometry": "POINT (1.5 0)", "id": 2},
+      {"geometry": "POINT (3 0)", "id": 3}
+    ]
+  },
+  "note": "With position=\"first\" the merged node sits where the first of its members was, and only the other moves.",
+  "operation": "merge_nodes",
+  "parameters": {
+    "position": "first",
+    "tolerance": 0.5
+  },
+  "title": "Merged node at the position of the first"
+}

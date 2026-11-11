@@ -1,0 +1,19 @@
+{
+  "expected": {
+    "distance": [0.75, 0.25],
+    "frac": [0.5, 0.5],
+    "line": [0, 1],
+    "point": [0, 0],
+    "vertex": [0, 2],
+    "xy": [[1.0, 0.0], [1.0, 1.0]]
+  },
+  "function": "points_near_lines",
+  "input": {
+    "coords": [[0, 0], [2, 0], [0, 1], [2, 1]],
+    "offsets": [0, 2, 4],
+    "tolerance": 1,
+    "xy": [[1, 0.75]]
+  },
+  "note": "Every line within tolerance is reported, sorted by line and not by distance.",
+  "title": "A point near two lines"
+}

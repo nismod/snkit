@@ -1,0 +1,28 @@
+{
+  "expected": {
+    "edges": [],
+    "nodes": [
+      {"code": ["x", "y"], "geometry": "POINT (0.25 0)", "id": 0, "load": 5, "name": "A"},
+      {"code": "z", "geometry": "POINT (3 0)", "id": 2, "load": 5, "name": "C"}
+    ]
+  },
+  "input": {
+    "edges": [],
+    "nodes": [
+      {"code": "x", "geometry": "POINT (0 0)", "id": 0, "load": 2, "name": "A"},
+      {"code": "y", "geometry": "POINT (0.5 0)", "id": 1, "load": 3, "name": "B"},
+      {"code": "z", "geometry": "POINT (3 0)", "id": 2, "load": 5, "name": "C"}
+    ]
+  },
+  "note": "agg gives a rule for each column: here the first name, the sum of load, and the list of codes.",
+  "operation": "merge_nodes",
+  "parameters": {
+    "agg": {
+      "code": "list",
+      "load": "sum",
+      "name": "first"
+    },
+    "tolerance": 0.5
+  },
+  "title": "Attributes of merged nodes, with rules"
+}

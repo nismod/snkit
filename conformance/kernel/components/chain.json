@@ -1,0 +1,13 @@
+{
+  "expected": {
+    "labels": [0, 1, 1, 1]
+  },
+  "function": "components",
+  "input": {
+    "a": [3, 2],
+    "b": [2, 1],
+    "n": 4
+  },
+  "note": "Links join up into one group whatever order they come in and whichever way round each is given.",
+  "title": "A chain given out of order"
+}

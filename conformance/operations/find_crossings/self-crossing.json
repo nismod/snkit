@@ -1,0 +1,20 @@
+{
+  "expected": {
+    "matches": [
+      {"edge_a": 0, "edge_b": 0, "measure_a": 1.0, "measure_b": 5.0, "x": 1.0, "y": 0.0}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 0, 2 1, 1 1, 1 -1)", "id": 0, "to_id": 1}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (1 -1)", "id": 1}
+    ]
+  },
+  "note": "The edge is both sides of the crossing, at two different distances along itself.",
+  "operation": "find_crossings",
+  "parameters": {},
+  "title": "An edge that crosses itself"
+}

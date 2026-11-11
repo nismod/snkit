@@ -1,0 +1,16 @@
+{
+  "expected": {
+    "frac_a": [0.25],
+    "frac_b": [1.0],
+    "seg_a": [0],
+    "seg_b": [2],
+    "xy": [[1.0, 0.0]]
+  },
+  "function": "segment_crossings",
+  "input": {
+    "coords": [[0, 0], [4, 0], [1, 1], [1, 0]],
+    "offsets": [0, 2, 4]
+  },
+  "note": "The meeting is exactly at the end of the second segment: its fraction is exactly 1 and the coordinate is that end's own.",
+  "title": "A segment that ends on another"
+}

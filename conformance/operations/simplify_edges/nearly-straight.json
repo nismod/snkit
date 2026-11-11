@@ -1,0 +1,26 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 0)", "id": 0, "to_id": 1}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (2 0)", "id": 1}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0.001, 2 0)", "id": 0, "to_id": 1}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (2 0)", "id": 1}
+    ]
+  },
+  "note": "The middle vertex is 0.001 off the straight line between the ends, less than the tolerance, so it is removed.",
+  "operation": "simplify_edges",
+  "parameters": {
+    "tolerance": 0.01
+  },
+  "title": "A vertex that hardly matters"
+}

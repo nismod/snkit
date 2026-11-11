@@ -1,0 +1,21 @@
+{
+  "expected": {
+    "matches": [
+      {"distance": 0.0, "node_a": 0, "node_b": 2}
+    ]
+  },
+  "input": {
+    "edges": [],
+    "nodes": [
+      {"geometry": "POINT (1 1)", "id": 0},
+      {"geometry": "POINT (2 1)", "id": 1},
+      {"geometry": "POINT (1 1)", "id": 2}
+    ]
+  },
+  "note": "With a tolerance of 0 only nodes at exactly the same place match.",
+  "operation": "match_nodes",
+  "parameters": {
+    "tolerance": 0
+  },
+  "title": "Two nodes at the same place"
+}

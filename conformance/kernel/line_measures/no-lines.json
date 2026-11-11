@@ -1,0 +1,14 @@
+{
+  "expected": {
+    "length": [],
+    "measure": [],
+    "seglen": []
+  },
+  "function": "line_measures",
+  "input": {
+    "coords": [],
+    "offsets": [0]
+  },
+  "note": "Empty arrays out.",
+  "title": "No lines"
+}

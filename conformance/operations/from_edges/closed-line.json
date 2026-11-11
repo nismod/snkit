@@ -1,0 +1,19 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 0, 1 1, 0 0)", "id": 0, "to_id": 0}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0}
+    ]
+  },
+  "input": {
+    "lines": [
+      {"geometry": "LINESTRING (0 0, 2 0, 1 1, 0 0)"}
+    ]
+  },
+  "note": "A closed line becomes a self-loop: one node, and an edge from it to itself.",
+  "operation": "from_edges",
+  "parameters": {},
+  "title": "A line that ends where it starts"
+}

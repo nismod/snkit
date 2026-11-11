@@ -1,0 +1,41 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "name": "a's", "to_id": 1}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (1 0)", "id": 1},
+      {"geometry": "POINT (5 0)", "id": 2}
+    ]
+  },
+  "input": {
+    "networks": {
+      "a": {
+        "edges": [
+          {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "name": "a's", "to_id": 1}
+        ],
+        "nodes": [
+          {"geometry": "POINT (0 0)", "id": 0},
+          {"geometry": "POINT (1 0)", "id": 1},
+          {"geometry": "POINT (5 0)", "id": 2},
+          {"geometry": "POINT (6 0)", "id": 3}
+        ]
+      },
+      "b": {
+        "edges": [
+          {"from_id": 0, "geometry": "LINESTRING (1 0, 0 0)", "id": 0, "name": "b's", "to_id": 1}
+        ],
+        "nodes": [
+          {"geometry": "POINT (1 0)", "id": 0},
+          {"geometry": "POINT (0 0)", "id": 1},
+          {"geometry": "POINT (5 0)", "id": 2}
+        ]
+      }
+    }
+  },
+  "note": "The shared edge has a's attributes. Of a's isolated nodes, the one that is also in b is kept.",
+  "operation": "intersection",
+  "parameters": {},
+  "title": "Attributes and isolated nodes"
+}

@@ -1,0 +1,22 @@
+{
+  "expected": {
+    "coords": [[0.0, 0.0], [1.0, 0.0], [1.0, 0.0], [4.0, 0.0]],
+    "dst": [2, 1],
+    "offsets": [0, 2, 4],
+    "parent": [0, 0],
+    "src": [0, 2]
+  },
+  "function": "split",
+  "input": {
+    "coords": [[0, 0], [4, 0]],
+    "cut_edge": [0],
+    "cut_node": [2],
+    "cut_seg": [0],
+    "cut_xy": [[1, 0]],
+    "dst": [1],
+    "offsets": [0, 2],
+    "src": [0]
+  },
+  "note": "The edge is cut on its only segment at (1 0), where node 2 goes. The two pieces share that coordinate, and each names the edge it was cut from.",
+  "title": "One cut"
+}

@@ -1,0 +1,16 @@
+{
+  "expected": {
+    "frac_a": [],
+    "frac_b": [],
+    "seg_a": [],
+    "seg_b": [],
+    "xy": []
+  },
+  "function": "segment_crossings",
+  "input": {
+    "coords": [[0, 0], [1, 0], [1, 0], [2, 1]],
+    "offsets": [0, 2, 4]
+  },
+  "note": "Left out by default, like the vertex shared by successive segments of one line.",
+  "title": "Lines that meet end to end"
+}

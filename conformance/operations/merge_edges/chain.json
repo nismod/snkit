@@ -1,0 +1,30 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0, 2 0)", "id": 2, "to_id": 2}
+    ],
+    "lineage": {
+      "edges": [[2, 0], [2, 1]],
+      "nodes": [[0, 0], [2, 2]]
+    },
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (2 0)", "id": 2}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "to_id": 1},
+      {"from_id": 2, "geometry": "LINESTRING (2 0, 1 0)", "id": 1, "to_id": 1}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (1 0)", "id": 1},
+      {"geometry": "POINT (2 0)", "id": 2}
+    ]
+  },
+  "note": "The two edges become one, with a new id, and the node between them is removed. Edge 1 ran the other way and is reversed, so the merged edge runs in the direction of the earliest.",
+  "operation": "merge_edges",
+  "parameters": {},
+  "title": "Two edges through a node of degree 2"
+}

@@ -1,0 +1,29 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1.001 0)", "id": 0, "to_id": 1},
+      {"from_id": 1, "geometry": "LINESTRING (1.001 0, 2 0)", "id": 1, "to_id": 2}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0, "name": "A"},
+      {"geometry": "POINT (1.001 0)", "id": 1, "name": "B"},
+      {"geometry": "POINT (2 0)", "id": 2, "name": null}
+    ]
+  },
+  "input": {
+    "lines": [
+      {"geometry": "LINESTRING (0 0, 1 0)"},
+      {"geometry": "LINESTRING (1 0, 2 0)"}
+    ],
+    "points": [
+      {"geometry": "POINT (0 0)", "name": "A"},
+      {"geometry": "POINT (1.001 0)", "name": "B"}
+    ]
+  },
+  "note": "Each line end is attached to the nearest node within the tolerance and moved exactly onto it: nodes are anchors. An end with no node in reach gets a new node.",
+  "operation": "from_nodes_and_edges",
+  "parameters": {
+    "tolerance": 0.01
+  },
+  "title": "Line ends attached to nearby nodes"
+}

@@ -1,0 +1,32 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0, 1.25 0)", "id": 0, "to_id": 1},
+      {"from_id": 1, "geometry": "LINESTRING (1.25 0, 1.5 0, 3 0)", "id": 1, "to_id": 3}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (1.25 0)", "id": 1},
+      {"geometry": "POINT (3 0)", "id": 3}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "to_id": 1},
+      {"from_id": 2, "geometry": "LINESTRING (1.5 0, 3 0)", "id": 1, "to_id": 3}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (1 0)", "id": 1},
+      {"geometry": "POINT (1.5 0)", "id": 2},
+      {"geometry": "POINT (3 0)", "id": 3}
+    ]
+  },
+  "note": "With geometry=\"extend\" each edge keeps its line and gains a vertex to reach the merged node.",
+  "operation": "merge_nodes",
+  "parameters": {
+    "geometry": "extend",
+    "tolerance": 0.5
+  },
+  "title": "Edges extended, not moved"
+}

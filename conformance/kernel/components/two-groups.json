@@ -1,0 +1,13 @@
+{
+  "expected": {
+    "labels": [0, 0, 2, 3, 3]
+  },
+  "function": "components",
+  "input": {
+    "a": [0, 3],
+    "b": [1, 4],
+    "n": 5
+  },
+  "note": "Each item is labelled with the lowest position in its group.",
+  "title": "Two linked groups and a single item"
+}

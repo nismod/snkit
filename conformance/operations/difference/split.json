@@ -1,0 +1,40 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 4 0)", "id": 2, "to_id": 4}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (4 0)", "id": 4}
+    ]
+  },
+  "input": {
+    "networks": {
+      "a": {
+        "edges": [
+          {"from_id": 0, "geometry": "LINESTRING (0 0, 10 0)", "id": 0, "to_id": 1}
+        ],
+        "nodes": [
+          {"geometry": "POINT (0 0)", "id": 0},
+          {"geometry": "POINT (10 0)", "id": 1}
+        ]
+      },
+      "b": {
+        "edges": [
+          {"from_id": 0, "geometry": "LINESTRING (4 0.1, 14 0.1)", "id": 0, "to_id": 1}
+        ],
+        "nodes": [
+          {"geometry": "POINT (4 0.1)", "id": 0},
+          {"geometry": "POINT (14 0.1)", "id": 1}
+        ]
+      }
+    }
+  },
+  "note": "With split=true, the stretch of a that b does not run alongside.",
+  "operation": "difference",
+  "parameters": {
+    "split": true,
+    "tolerance": 0.5
+  },
+  "title": "Edges that partly overlap"
+}

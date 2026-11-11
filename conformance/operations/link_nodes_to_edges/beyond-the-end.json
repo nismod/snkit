@@ -1,0 +1,27 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 0)", "id": 0, "to_id": 1},
+      {"from_id": 2, "geometry": "LINESTRING (3 1, 2 0)", "id": 1, "to_id": 1}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (2 0)", "id": 1},
+      {"geometry": "POINT (3 1)", "id": 2}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 0)", "id": 0, "to_id": 1}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (2 0)", "id": 1},
+      {"geometry": "POINT (3 1)", "id": 2}
+    ]
+  },
+  "note": "The nearest place on the edge is its end, so the node is linked to the node already there and the edge is not split.",
+  "operation": "link_nodes_to_edges",
+  "parameters": {},
+  "title": "A node beyond the end of an edge"
+}

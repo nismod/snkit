@@ -1,0 +1,28 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "to_id": 1},
+      {"from_id": 1, "geometry": "LINESTRING (1 0, 1 2)", "id": 1, "to_id": 2}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (1 0)", "id": 1},
+      {"geometry": "POINT (1 2)", "id": 2}
+    ]
+  },
+  "input": {
+    "edges": [],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (1 0)", "id": 1},
+      {"geometry": "POINT (1 2)", "id": 2}
+    ]
+  },
+  "note": "With how=\"nearest\" each node is linked to its nearest neighbour within tolerance. Nodes 0 and 1 choose each other and node 2 chooses node 1, so the long side is left out.",
+  "operation": "link_nodes",
+  "parameters": {
+    "how": "nearest",
+    "tolerance": 2.5
+  },
+  "title": "Each node to its nearest only"
+}

@@ -1,0 +1,26 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 0, 1 1, 0 0)", "id": 3, "to_id": 0}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 0)", "id": 0, "to_id": 1},
+      {"from_id": 1, "geometry": "LINESTRING (2 0, 1 1)", "id": 1, "to_id": 2},
+      {"from_id": 2, "geometry": "LINESTRING (1 1, 0 0)", "id": 2, "to_id": 0}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (2 0)", "id": 1},
+      {"geometry": "POINT (1 1)", "id": 2}
+    ]
+  },
+  "note": "Every node of the ring has two edges. The ring becomes a single self-loop that keeps one node: the start of its earliest edge.",
+  "operation": "merge_edges",
+  "parameters": {},
+  "title": "A closed ring"
+}

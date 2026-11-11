@@ -1,0 +1,29 @@
+{
+  "expected": {
+    "matches": [
+      {"distance": 1.414213562373, "edge": 0, "measure": 2.0, "node": 4, "x": 2.0, "y": 0.0},
+      {"distance": 0.5, "edge": 1, "measure": 1.0, "node": 5, "x": 1.0, "y": 3.0}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 0)", "id": 0, "to_id": 1},
+      {"from_id": 2, "geometry": "LINESTRING (0 3, 2 3)", "id": 1, "to_id": 3}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (2 0)", "id": 1},
+      {"geometry": "POINT (0 3)", "id": 2},
+      {"geometry": "POINT (2 3)", "id": 3},
+      {"geometry": "POINT (3 1)", "id": 4},
+      {"geometry": "POINT (1 2.5)", "id": 5}
+    ]
+  },
+  "note": "With how=\"nearest\" each node chosen by the nodes mask gets one match, to its nearest edge, however far. Here the nearest place is the end of the edge, which is reported in this mode.",
+  "operation": "match_nodes_to_edges",
+  "parameters": {
+    "how": "nearest",
+    "nodes": [false, false, false, false, true, true]
+  },
+  "title": "Nearest edge to each chosen node"
+}

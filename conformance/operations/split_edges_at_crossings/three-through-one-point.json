@@ -1,0 +1,40 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 1)", "id": 3, "to_id": 6},
+      {"from_id": 6, "geometry": "LINESTRING (1 1, 2 2)", "id": 4, "to_id": 1},
+      {"from_id": 2, "geometry": "LINESTRING (0 2, 1 1)", "id": 5, "to_id": 6},
+      {"from_id": 6, "geometry": "LINESTRING (1 1, 2 0)", "id": 6, "to_id": 3},
+      {"from_id": 4, "geometry": "LINESTRING (0 1, 1 1)", "id": 7, "to_id": 6},
+      {"from_id": 6, "geometry": "LINESTRING (1 1, 2 1)", "id": 8, "to_id": 5}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (2 2)", "id": 1},
+      {"geometry": "POINT (0 2)", "id": 2},
+      {"geometry": "POINT (2 0)", "id": 3},
+      {"geometry": "POINT (0 1)", "id": 4},
+      {"geometry": "POINT (2 1)", "id": 5},
+      {"geometry": "POINT (1 1)", "id": 6}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 2)", "id": 0, "to_id": 1},
+      {"from_id": 2, "geometry": "LINESTRING (0 2, 2 0)", "id": 1, "to_id": 3},
+      {"from_id": 4, "geometry": "LINESTRING (0 1, 2 1)", "id": 2, "to_id": 5}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (2 2)", "id": 1},
+      {"geometry": "POINT (0 2)", "id": 2},
+      {"geometry": "POINT (2 0)", "id": 3},
+      {"geometry": "POINT (0 1)", "id": 4},
+      {"geometry": "POINT (2 1)", "id": 5}
+    ]
+  },
+  "note": "The three crossings are at the same place and share one new node. Each edge is split in two.",
+  "operation": "split_edges_at_crossings",
+  "parameters": {},
+  "title": "Three edges through one point"
+}

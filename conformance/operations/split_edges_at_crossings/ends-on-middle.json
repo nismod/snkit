@@ -1,0 +1,31 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 2, "to_id": 3},
+      {"from_id": 3, "geometry": "LINESTRING (1 0, 2 0)", "id": 3, "to_id": 1},
+      {"from_id": 2, "geometry": "LINESTRING (1 1, 1 0)", "id": 1, "to_id": 3}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (2 0)", "id": 1},
+      {"geometry": "POINT (1 1)", "id": 2},
+      {"geometry": "POINT (1 0)", "id": 3}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 0)", "id": 0, "to_id": 1},
+      {"from_id": 2, "geometry": "LINESTRING (1 1, 1 0)", "id": 1, "to_id": 3}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (2 0)", "id": 1},
+      {"geometry": "POINT (1 1)", "id": 2},
+      {"geometry": "POINT (1 0)", "id": 3}
+    ]
+  },
+  "note": "Edge 0 is split at the node where edge 1 ends. No node is created, and edge 1 is unchanged.",
+  "operation": "split_edges_at_crossings",
+  "parameters": {},
+  "title": "An edge that ends on the middle of another"
+}

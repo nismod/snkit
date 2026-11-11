@@ -1,0 +1,37 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 2, "to_id": 4},
+      {"from_id": 4, "geometry": "LINESTRING (1 0, 3 0)", "id": 3, "to_id": 3},
+      {"from_id": 3, "geometry": "LINESTRING (3 0, 4 0)", "id": 4, "to_id": 1},
+      {"from_id": 1, "geometry": "LINESTRING (4 0, 4 2)", "id": 1, "to_id": 2}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (4 0)", "id": 1},
+      {"geometry": "POINT (4 2)", "id": 2},
+      {"geometry": "POINT (3 0)", "id": 3},
+      {"geometry": "POINT (1 0)", "id": 4}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 4 0)", "id": 0, "to_id": 1},
+      {"from_id": 1, "geometry": "LINESTRING (4 0, 4 2)", "id": 1, "to_id": 2}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (4 0)", "id": 1},
+      {"geometry": "POINT (4 2)", "id": 2}
+    ]
+  },
+  "note": "Cuts need not be given in order. The pieces are in order along the edge and take its place in the edges table; the new nodes are numbered in the order the cuts were given.",
+  "operation": "split_edges",
+  "parameters": {
+    "locations": [
+      {"edge": 0, "measure": 3},
+      {"edge": 0, "measure": 1}
+    ]
+  },
+  "title": "Several cuts on one edge"
+}

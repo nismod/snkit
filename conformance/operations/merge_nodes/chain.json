@@ -1,0 +1,36 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 0 1.5)", "id": 0, "to_id": 1},
+      {"from_id": 2, "geometry": "LINESTRING (1 1.5, 0 1.5)", "id": 1, "to_id": 1},
+      {"from_id": 1, "geometry": "LINESTRING (0 1.5, 0 3)", "id": 2, "to_id": 5}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (0 1.5)", "id": 1},
+      {"geometry": "POINT (1 1.5)", "id": 2},
+      {"geometry": "POINT (0 3)", "id": 5}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 0 1)", "id": 0, "to_id": 1},
+      {"from_id": 2, "geometry": "LINESTRING (1 1.5, 0 1.5)", "id": 1, "to_id": 3},
+      {"from_id": 4, "geometry": "LINESTRING (0 2, 0 3)", "id": 2, "to_id": 5}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (0 1)", "id": 1},
+      {"geometry": "POINT (1 1.5)", "id": 2},
+      {"geometry": "POINT (0 1.5)", "id": 3},
+      {"geometry": "POINT (0 2)", "id": 4},
+      {"geometry": "POINT (0 3)", "id": 5}
+    ]
+  },
+  "note": "The nodes at 1, 1.5 and 2 on the y axis are each within tolerance of the next, so all three merge, although the outer two are further apart than the tolerance.",
+  "operation": "merge_nodes",
+  "parameters": {
+    "tolerance": 0.5
+  },
+  "title": "Nodes merge in chains"
+}

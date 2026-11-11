@@ -1,0 +1,14 @@
+{
+  "expected": {
+    "length": [1.0, 4.0],
+    "measure": [0.0, 1.0, 0.0, 2.0, 4.0],
+    "seglen": [1.0, 0.0, 2.0, 2.0, 0.0]
+  },
+  "function": "line_measures",
+  "input": {
+    "coords": [[0, 0], [1, 0], [0, 0], [0, 2], [2, 2]],
+    "offsets": [0, 2, 5]
+  },
+  "note": "Measures start again at 0 for each line.",
+  "title": "Two lines"
+}

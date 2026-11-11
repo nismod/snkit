@@ -1,0 +1,27 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 1, "to_id": 2},
+      {"from_id": 2, "geometry": "LINESTRING (1 0, 2 0, 2 1, 1 1, 1 0)", "id": 2, "to_id": 2},
+      {"from_id": 2, "geometry": "LINESTRING (1 0, 1 -1)", "id": 3, "to_id": 1}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (1 -1)", "id": 1},
+      {"geometry": "POINT (1 0)", "id": 2}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 0, 2 1, 1 1, 1 -1)", "id": 0, "to_id": 1}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (1 -1)", "id": 1}
+    ]
+  },
+  "note": "The edge is cut twice at the crossing, giving three pieces. The middle piece is a loop.",
+  "operation": "split_edges_at_crossings",
+  "parameters": {},
+  "title": "An edge that crosses itself"
+}

@@ -1,0 +1,33 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0.01)", "id": 1, "to_id": 2},
+      {"from_id": 2, "geometry": "LINESTRING (1 0.01, 2 0)", "id": 2, "to_id": 1}
+    ],
+    "lineage": {
+      "edges": [[1, 0], [2, 0]],
+      "nodes": [[0, 0], [1, 1], [2, 2]]
+    },
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (2 0)", "id": 1},
+      {"geometry": "POINT (1 0.01)", "id": 2}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 0)", "id": 0, "to_id": 1}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (2 0)", "id": 1},
+      {"geometry": "POINT (1 0.01)", "id": 2}
+    ]
+  },
+  "note": "The edge is split at the node and bends to pass through it. The node does not move.",
+  "operation": "split_edges_at_nodes",
+  "parameters": {
+    "tolerance": 0.05
+  },
+  "title": "A node close to an edge"
+}

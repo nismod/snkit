@@ -1,0 +1,23 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 0, 1 1, 0 0)", "id": 0, "to_id": 0}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 0, 1 1, 0 0)", "id": 0, "to_id": 0},
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 1, 2 0, 0 0)", "id": 1, "to_id": 0}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0}
+    ]
+  },
+  "note": "Two loops on one node along the same line, drawn in opposite directions, are duplicates.",
+  "operation": "drop_duplicate_edges",
+  "parameters": {},
+  "title": "The same loop drawn twice"
+}

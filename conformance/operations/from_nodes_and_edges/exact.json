@@ -1,0 +1,25 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "to_id": 2}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (1 0.5)", "id": 1},
+      {"geometry": "POINT (1 0)", "id": 2}
+    ]
+  },
+  "input": {
+    "lines": [
+      {"geometry": "LINESTRING (0 0, 1 0)"}
+    ],
+    "points": [
+      {"geometry": "POINT (0 0)"},
+      {"geometry": "POINT (1 0.5)"}
+    ]
+  },
+  "note": "With no tolerance an end is attached only to a node at exactly the same place.",
+  "operation": "from_nodes_and_edges",
+  "parameters": {},
+  "title": "No tolerance"
+}

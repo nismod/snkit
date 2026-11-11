@@ -1,0 +1,14 @@
+{
+  "expected": {
+    "length": [7.0],
+    "measure": [0.0, 3.0, 7.0],
+    "seglen": [3.0, 4.0, 0.0]
+  },
+  "function": "line_measures",
+  "input": {
+    "coords": [[0, 0], [3, 0], [3, 4]],
+    "offsets": [0, 3]
+  },
+  "note": "For each vertex, the length of the segment that starts there (0 at the last) and the distance along the line; and the length of the line.",
+  "title": "A line with a corner"
+}

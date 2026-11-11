@@ -1,0 +1,42 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "to_id": 1},
+      {"from_id": 1, "geometry": "LINESTRING (1 0, 2 0)", "id": 1, "to_id": 3}
+    ],
+    "nodes": [
+      {"code": null, "geometry": "POINT (0 0)", "id": 0},
+      {"code": "X", "geometry": "POINT (1 0)", "id": 1},
+      {"code": null, "geometry": "POINT (2 0)", "id": 3}
+    ]
+  },
+  "input": {
+    "networks": {
+      "a_west": {
+        "edges": [
+          {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "to_id": 1}
+        ],
+        "nodes": [
+          {"code": null, "geometry": "POINT (0 0)", "id": 0},
+          {"code": "X", "geometry": "POINT (1 0)", "id": 1}
+        ]
+      },
+      "b_east": {
+        "edges": [
+          {"from_id": 0, "geometry": "LINESTRING (1 0.25, 2 0)", "id": 0, "to_id": 1}
+        ],
+        "nodes": [
+          {"code": "X", "geometry": "POINT (1 0.25)", "id": 0},
+          {"code": null, "geometry": "POINT (2 0)", "id": 1}
+        ]
+      }
+    }
+  },
+  "note": "on names a column: nodes of different networks with the same value in it are the same node. Nodes with a null value are never matched.",
+  "operation": "stitch",
+  "parameters": {
+    "column": null,
+    "on": "code"
+  },
+  "title": "Matching nodes by a column"
+}

@@ -1,0 +1,23 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "id_original": "a", "to_id": 1},
+      {"from_id": 1, "geometry": "LINESTRING (1 0, 2 0)", "id": 1, "id_original": "b", "to_id": 2}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (1 0)", "id": 1},
+      {"geometry": "POINT (2 0)", "id": 2}
+    ]
+  },
+  "input": {
+    "lines": [
+      {"geometry": "LINESTRING (0 0, 1 0)", "id": "a"},
+      {"geometry": "LINESTRING (1 0, 2 0)", "id": "b"}
+    ]
+  },
+  "note": "Ids that are not non-negative integers are kept as an attribute, id_original, and integer ids are generated.",
+  "operation": "from_edges",
+  "parameters": {},
+  "title": "Ids supplied as text"
+}

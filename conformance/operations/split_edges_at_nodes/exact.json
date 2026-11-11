@@ -1,0 +1,29 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 1, "to_id": 2},
+      {"from_id": 2, "geometry": "LINESTRING (1 0, 4 0)", "id": 2, "to_id": 1}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (4 0)", "id": 1},
+      {"geometry": "POINT (1 0)", "id": 2},
+      {"geometry": "POINT (3 0.25)", "id": 3}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 4 0)", "id": 0, "to_id": 1}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (4 0)", "id": 1},
+      {"geometry": "POINT (1 0)", "id": 2},
+      {"geometry": "POINT (3 0.25)", "id": 3}
+    ]
+  },
+  "note": "With no tolerance, only a node exactly on the line splits it. Node 3, just off the line, does not.",
+  "operation": "split_edges_at_nodes",
+  "parameters": {},
+  "title": "A node exactly on an edge"
+}

@@ -1,0 +1,32 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 0)", "id": 1, "to_id": 2},
+      {"from_id": 2, "geometry": "LINESTRING (2 0, 4 0)", "id": 2, "to_id": 1}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (4 0)", "id": 1},
+      {"geometry": "POINT (2 0)", "id": 2}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 4 0)", "id": 0, "to_id": 1}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (4 0)", "id": 1}
+    ]
+  },
+  "note": "A cut within the tolerance of an end of the edge is not made, so no very short edge is created.",
+  "operation": "split_edges",
+  "parameters": {
+    "locations": [
+      {"edge": 0, "measure": 0.25},
+      {"edge": 0, "measure": 2}
+    ],
+    "tolerance": 0.5
+  },
+  "title": "A cut close to an end"
+}

@@ -1,0 +1,28 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "name": "good", "to_id": 1},
+      {"from_id": 1, "geometry": "LINESTRING (1 0, 2 0)", "id": 1, "name": "also good", "to_id": 2}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (1 0)", "id": 1},
+      {"geometry": "POINT (2 0)", "id": 2}
+    ]
+  },
+  "input": {
+    "lines": [
+      {"geometry": "LINESTRING (0 0, 1 0)", "name": "good"},
+      {"geometry": "LINESTRING (1 1, 1 1)", "name": "no length"},
+      {"geometry": "LINESTRING EMPTY", "name": "empty"},
+      {"geometry": null, "name": "missing"},
+      {"geometry": "LINESTRING (1 0, 2 0)", "name": "also good"}
+    ]
+  },
+  "note": "A line of no length, an empty line and a missing geometry cannot be edges. With invalid=\"drop\" they are left out; the edges that remain are numbered from 0.",
+  "operation": "from_edges",
+  "parameters": {
+    "invalid": "drop"
+  },
+  "title": "Unusable geometries, dropped"
+}

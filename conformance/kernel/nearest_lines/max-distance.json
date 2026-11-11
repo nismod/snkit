@@ -1,0 +1,19 @@
+{
+  "expected": {
+    "distance": [0.25],
+    "frac": [0.5],
+    "line": [0],
+    "point": [0],
+    "vertex": [0],
+    "xy": [[1.0, 0.0]]
+  },
+  "function": "nearest_lines",
+  "input": {
+    "coords": [[0, 0], [2, 0], [0, 1], [2, 1]],
+    "max_distance": 1,
+    "offsets": [0, 2, 4],
+    "xy": [[1, 0.25], [1, 5]]
+  },
+  "note": "A point with no line within max_distance is left out.",
+  "title": "Within a distance"
+}

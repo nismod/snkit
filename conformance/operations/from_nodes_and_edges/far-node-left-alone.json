@@ -1,0 +1,26 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 1, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "to_id": 2}
+    ],
+    "nodes": [
+      {"geometry": "POINT (1.5 0)", "id": 0},
+      {"geometry": "POINT (0 0)", "id": 1},
+      {"geometry": "POINT (1 0)", "id": 2}
+    ]
+  },
+  "input": {
+    "lines": [
+      {"geometry": "LINESTRING (0 0, 1 0)"}
+    ],
+    "points": [
+      {"geometry": "POINT (1.5 0)"}
+    ]
+  },
+  "note": "A node further than the tolerance from every line end is kept, unattached. Both ends get new nodes.",
+  "operation": "from_nodes_and_edges",
+  "parameters": {
+    "tolerance": 0.1
+  },
+  "title": "A node out of reach"
+}

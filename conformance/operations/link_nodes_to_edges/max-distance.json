@@ -1,0 +1,33 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 1, "to_id": 4},
+      {"from_id": 4, "geometry": "LINESTRING (1 0, 4 0)", "id": 2, "to_id": 1},
+      {"from_id": 2, "geometry": "LINESTRING (1 0.5, 1 0)", "id": 3, "to_id": 4}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (4 0)", "id": 1},
+      {"geometry": "POINT (1 0.5)", "id": 2},
+      {"geometry": "POINT (3 2)", "id": 3},
+      {"geometry": "POINT (1 0)", "id": 4}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 4 0)", "id": 0, "to_id": 1}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (4 0)", "id": 1},
+      {"geometry": "POINT (1 0.5)", "id": 2},
+      {"geometry": "POINT (3 2)", "id": 3}
+    ]
+  },
+  "note": "Node 2 is within max_distance of the edge and is linked. Node 3 is not, and is left alone.",
+  "operation": "link_nodes_to_edges",
+  "parameters": {
+    "max_distance": 1
+  },
+  "title": "Nearest, but not too far"
+}

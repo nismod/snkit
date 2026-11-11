@@ -1,0 +1,26 @@
+{
+  "expected": {
+    "matches": [
+      {"distance": 0.25, "edge": 1, "measure": 0.75, "node": 4, "x": 3.0, "y": 0.0}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 0)", "id": 0, "to_id": 1},
+      {"from_id": 2, "geometry": "LINESTRING (2.25 0, 4 0)", "id": 1, "to_id": 3}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (2 0)", "id": 1},
+      {"geometry": "POINT (2.25 0)", "id": 2},
+      {"geometry": "POINT (4 0)", "id": 3},
+      {"geometry": "POINT (3 0.25)", "id": 4}
+    ]
+  },
+  "note": "Every node here is within tolerance of some edge, but only node 4 is near the middle of an edge it is not an end of. Node 2 is nearest to the very end of edge 1, so it is near a node and not near the edge.",
+  "operation": "match_nodes_to_edges",
+  "parameters": {
+    "tolerance": 0.5
+  },
+  "title": "Nodes are not matched to their own edges, or to the ends of others"
+}

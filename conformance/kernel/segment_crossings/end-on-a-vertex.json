@@ -1,0 +1,16 @@
+{
+  "expected": {
+    "frac_a": [1.0, 0.0],
+    "frac_b": [0.0, 0.0],
+    "seg_a": [0, 1],
+    "seg_b": [3, 3],
+    "xy": [[1.0, 0.0], [1.0, 0.0]]
+  },
+  "function": "segment_crossings",
+  "input": {
+    "coords": [[0, 0], [1, 0], [1, 1], [1, 0], [2, 0]],
+    "offsets": [0, 3, 5]
+  },
+  "note": "The second line starts at the corner of the first. That place is on two segments of the first line, and a meeting is given for each: at the end of one (fraction 1) and the start of the next (fraction 0).",
+  "title": "A line that ends on a vertex of another"
+}

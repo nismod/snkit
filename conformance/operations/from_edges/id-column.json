@@ -1,0 +1,25 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 5, "to_id": 1},
+      {"from_id": 1, "geometry": "LINESTRING (1 0, 2 0)", "id": 3, "to_id": 2}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (1 0)", "id": 1},
+      {"geometry": "POINT (2 0)", "id": 2}
+    ]
+  },
+  "input": {
+    "lines": [
+      {"code": 5, "geometry": "LINESTRING (0 0, 1 0)"},
+      {"code": 3, "geometry": "LINESTRING (1 0, 2 0)"}
+    ]
+  },
+  "note": "edge_id names the column to use as ids. It is used directly because it holds unique non-negative integers.",
+  "operation": "from_edges",
+  "parameters": {
+    "edge_id": "code"
+  },
+  "title": "Ids from a named column"
+}

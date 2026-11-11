@@ -1,0 +1,23 @@
+{
+  "expected": {
+    "edges": [],
+    "nodes": [
+      {"geometry": "POINT (0.25 0)", "id": 0, "kind": "stop", "name": null},
+      {"geometry": "POINT (3 0)", "id": 2, "kind": "depot", "name": "C"}
+    ]
+  },
+  "input": {
+    "edges": [],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0, "kind": "stop", "name": "A"},
+      {"geometry": "POINT (0.5 0)", "id": 1, "kind": "stop", "name": "B"},
+      {"geometry": "POINT (3 0)", "id": 2, "kind": "depot", "name": "C"}
+    ]
+  },
+  "note": "By default a merged node keeps a value only where all its members agree: kind is kept, name is null.",
+  "operation": "merge_nodes",
+  "parameters": {
+    "tolerance": 0.5
+  },
+  "title": "Attributes of merged nodes"
+}

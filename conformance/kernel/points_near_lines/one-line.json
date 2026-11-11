@@ -1,0 +1,19 @@
+{
+  "expected": {
+    "distance": [0.5],
+    "frac": [0.5],
+    "line": [0],
+    "point": [0],
+    "vertex": [0],
+    "xy": [[1.0, 0.0]]
+  },
+  "function": "points_near_lines",
+  "input": {
+    "coords": [[0, 0], [2, 0], [2, 2]],
+    "offsets": [0, 3],
+    "tolerance": 1,
+    "xy": [[1, 0.5], [1, 3]]
+  },
+  "note": "Point 0 is within tolerance of the line; its nearest place is half way along the first segment. Point 1 is too far away.",
+  "title": "Points beside a line"
+}

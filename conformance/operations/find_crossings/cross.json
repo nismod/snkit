@@ -1,0 +1,23 @@
+{
+  "expected": {
+    "matches": [
+      {"edge_a": 0, "edge_b": 1, "measure_a": 1.0, "measure_b": 1.0, "x": 1.0, "y": 0.0}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 0)", "id": 0, "to_id": 1},
+      {"from_id": 2, "geometry": "LINESTRING (1 -1, 1 1)", "id": 1, "to_id": 3}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (2 0)", "id": 1},
+      {"geometry": "POINT (1 -1)", "id": 2},
+      {"geometry": "POINT (1 1)", "id": 3}
+    ]
+  },
+  "note": "One crossing, with the distance along each edge and the place.",
+  "operation": "find_crossings",
+  "parameters": {},
+  "title": "Two edges that cross"
+}

@@ -1,0 +1,41 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "source": "a_west", "to_id": 1},
+      {"from_id": 1, "geometry": "LINESTRING (1 0, 2 0)", "id": 1, "source": "b_east", "to_id": 3}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0, "source": "a_west"},
+      {"geometry": "POINT (1 0)", "id": 1, "source": "a_west"},
+      {"geometry": "POINT (2 0)", "id": 3, "source": "b_east"}
+    ]
+  },
+  "input": {
+    "networks": {
+      "a_west": {
+        "edges": [
+          {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "to_id": 1}
+        ],
+        "nodes": [
+          {"geometry": "POINT (0 0)", "id": 0},
+          {"geometry": "POINT (1 0)", "id": 1}
+        ]
+      },
+      "b_east": {
+        "edges": [
+          {"from_id": 0, "geometry": "LINESTRING (1.25 0, 2 0)", "id": 0, "to_id": 1}
+        ],
+        "nodes": [
+          {"geometry": "POINT (1.25 0)", "id": 0},
+          {"geometry": "POINT (2 0)", "id": 1}
+        ]
+      }
+    }
+  },
+  "note": "With a tolerance, nodes of different networks that close are one node. It takes the position it has in the first network, and the edge of the second moves to it.",
+  "operation": "stitch",
+  "parameters": {
+    "tolerance": 0.5
+  },
+  "title": "Nodes that nearly meet on the cut"
+}

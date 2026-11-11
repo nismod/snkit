@@ -1,0 +1,12 @@
+{
+  "expected": {
+    "group": [],
+    "is_first": []
+  },
+  "function": "group_index",
+  "input": {
+    "labels": []
+  },
+  "note": "Empty arrays out.",
+  "title": "No items"
+}

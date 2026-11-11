@@ -1,0 +1,26 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 0)", "id": 0, "to_id": 1},
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 1, 2 0)", "id": 1, "to_id": 1}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (2 0)", "id": 1}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 0)", "id": 0, "to_id": 1},
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 1, 2 0)", "id": 1, "to_id": 1}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (2 0)", "id": 1}
+    ]
+  },
+  "note": "Edges 0 and 1 join the same nodes but by different lines, so both are kept.",
+  "operation": "drop_duplicate_edges",
+  "parameters": {},
+  "title": "Different routes between the same nodes"
+}
