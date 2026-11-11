@@ -52,6 +52,22 @@ fn components<'py>(py: Python<'py>, n: usize, a: Int<'py>, b: Int<'py>) -> PyRes
         .into_pyarray(py))
 }
 
+/// Join the sets of each pair (a, b) in a forest kept in `parent`, an array of
+/// unsigned 32-bit integers that starts as 0, 1, 2, ... and is changed in place.
+#[pyfunction]
+fn components_link<'py>(mut parent: numpy::PyReadwriteArray1<'py, u32>, a: Int<'py>, b: Int<'py>) -> PyResult<()> {
+    crate::components::link(parent.as_slice_mut()?, a.as_slice()?, b.as_slice()?);
+    Ok(())
+}
+
+/// Turn the forest in `parent` into labels, in place: each entry becomes the
+/// lowest position in its set.
+#[pyfunction]
+fn components_settle(mut parent: numpy::PyReadwriteArray1<'_, u32>) -> PyResult<()> {
+    crate::components::settle(parent.as_slice_mut()?);
+    Ok(())
+}
+
 /// Turn component labels into consecutive group numbers, and mark the first of each group.
 #[pyfunction]
 fn group_index<'py>(py: Python<'py>, labels: Int<'py>) -> PyResult<(IntOut<'py>, Bound<'py, PyArray1<bool>>)> {
@@ -364,6 +380,8 @@ fn tile_reaches<'py>(
 fn native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(components, module)?)?;
     module.add_function(wrap_pyfunction!(group_index, module)?)?;
+    module.add_function(wrap_pyfunction!(components_link, module)?)?;
+    module.add_function(wrap_pyfunction!(components_settle, module)?)?;
     module.add_function(wrap_pyfunction!(split, module)?)?;
     module.add_function(wrap_pyfunction!(segment_crossings, module)?)?;
     module.add_function(wrap_pyfunction!(point_pairs, module)?)?;

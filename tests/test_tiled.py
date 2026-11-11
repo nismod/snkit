@@ -190,3 +190,94 @@ def test_tiled_build_handles_parts_bad_rows_and_names_in_use(tmp_path):
     lines.iloc[2:].to_parquet(tmp_path / "nothing.parquet")
     with pytest.raises(ValueError, match="no lines"):
         snkit.build_network(tmp_path / "nothing.parquet", tmp_path / "out2", invalid="drop")
+
+
+def rounded(network, digits=7):
+    """Edges and nodes with coordinates rounded, for comparing results that were summed in a different order"""
+    network = network.to_geopandas() if isinstance(network, snkit.ArrayNetwork) else network
+
+    def text(geoms):
+        return shapely.to_wkt(shapely.transform(np.asarray(geoms, dtype=object), lambda c: np.round(c, digits) + 0.0))
+
+    lines = network.edges.geometry.values
+    edges = sorted(min(a, b) for a, b in zip(text(lines), text(shapely.reverse(lines))))
+    return edges, sorted(text(network.nodes.geometry.values))
+
+
+def test_tiles_worked_on_at_once_give_the_same_files(tmp_path):
+    lines = random_lines(9, count=800)
+    lines.to_parquet(tmp_path / "lines.parquet")
+    one = snkit.build_network(tmp_path / "lines.parquet", tmp_path / "one", max_tile_edges=60)
+    four = snkit.build_network(tmp_path / "lines.parquet", tmp_path / "four", max_tile_edges=60, workers=4)
+    assert one.tiles > 8 and (one.node_count, one.edge_count) == (four.node_count, four.edge_count)
+    for name in ("nodes.parquet", "edges.parquet"):
+        assert pa.parquet.read_table(tmp_path / "one" / name).equals(pa.parquet.read_table(tmp_path / "four" / name))
+
+
+def test_components_of_a_network_on_disk(tmp_path):
+    lines = random_lines(10, count=700, reach=5.0)
+    lines.to_parquet(tmp_path / "lines.parquet")
+    built = snkit.build_network(tmp_path / "lines.parquet", tmp_path / "built", max_tile_edges=60)
+    labelled = snkit.tiled.label_components(tmp_path / "built", tmp_path / "labelled")
+    assert (labelled.node_count, labelled.edge_count) == (built.node_count, built.edge_count)
+
+    on_disk = labelled.read()
+    in_memory = snkit.label_components(built.read())
+    assert on_disk.nodes["component"].nunique() > 20
+    assert on_disk.nodes["component"].tolist() == in_memory.nodes["component"].tolist()
+    assert on_disk.edges["component"].tolist() == in_memory.edges["component"].tolist()
+    assert on_disk.edges.columns.tolist() == in_memory.edges.columns.tolist()
+    # and still a GeoParquet file that others can read
+    assert geopandas.read_parquet(labelled.edges).crs.to_epsg() == 27700
+
+
+@pytest.mark.parametrize("position", ["centroid", "first"])
+def test_merging_near_nodes_on_disk_matches_merging_in_memory(tmp_path, position):
+    lines = random_lines(11, count=900)
+    lines.to_parquet(tmp_path / "lines.parquet")
+    built = snkit.build_network(tmp_path / "lines.parquet", tmp_path / "built", max_tile_edges=80)
+    tolerance = 1.5
+    merged = snkit.tiled.merge_nodes(built, tmp_path / "merged", tolerance, max_tile_nodes=150, position=position)
+    expected = snkit.merge_nodes(built.read(), tolerance, position=position).to_geopandas()
+    assert merged.node_count == len(expected.nodes) < built.node_count
+    assert merged.edge_count == len(expected.edges) < built.edge_count
+
+    network = merged.read()
+    assert snkit.validate(network) == []
+    assert rounded(network) == rounded(expected)
+    assert network.nodes["id"].tolist() == expected.nodes["id"].tolist()
+    assert sorted(zip(network.edges["from_id"], network.edges["to_id"])) == sorted(
+        zip(expected.edges["from_id"], expected.edges["to_id"])
+    )
+    assert snkit.match_nodes(network, tolerance).empty
+    assert sorted(network.edges["name"]) == sorted(expected.edges["name"])
+    assert not list(tmp_path.glob("snkit-*"))
+
+    # components after merging: ids are no longer consecutive
+    labelled = snkit.tiled.label_components(merged, tmp_path / "labelled").read()
+    assert labelled.nodes["component"].tolist() == snkit.label_components(network).nodes["component"].tolist()
+
+
+def test_merging_on_disk_with_nothing_to_merge_and_with_degrees(tmp_path):
+    lines = random_lines(12, count=200)
+    lines.to_parquet(tmp_path / "lines.parquet")
+    built = snkit.build_network(tmp_path / "lines.parquet", tmp_path / "built", max_tile_edges=50)
+    same = snkit.tiled.merge_nodes(built, tmp_path / "same", tolerance=0)
+    assert canonical(same.read()) == canonical(built.read())
+    with pytest.raises(ValueError, match="position"):
+        snkit.tiled.merge_nodes(built, tmp_path / "x", 1, position="middle")
+
+    lines.to_crs(4326).to_parquet(tmp_path / "degrees.parquet")
+    degrees = snkit.build_network(tmp_path / "degrees.parquet", tmp_path / "degrees", max_tile_edges=50)
+    with pytest.raises(ValueError, match="degrees"):
+        snkit.tiled.merge_nodes(degrees, tmp_path / "y", 0.001)
+
+
+def test_build_with_a_tolerance_joins_ends_that_nearly_meet(tmp_path):
+    lines = random_lines(13, count=600)
+    lines.to_parquet(tmp_path / "lines.parquet")
+    built = snkit.build_network(tmp_path / "lines.parquet", tmp_path / "out", max_tile_edges=70, tolerance=1.0)
+    expected = snkit.merge_nodes(in_memory(lines), 1.0)
+    assert (built.node_count, built.edge_count) == (len(expected.nodes), len(expected.edges))
+    assert rounded(built.read()) == rounded(expected)
+    assert sorted(p.name for p in (tmp_path / "out").iterdir()) == ["edges.parquet", "nodes.parquet"]

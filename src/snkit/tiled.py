@@ -33,6 +33,7 @@ from __future__ import annotations
 import shutil
 import tempfile
 import warnings
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple
@@ -197,6 +198,16 @@ class _Scratch:
         self.files += 1
         self.waiting, self.rows = {}, 0
 
+    def put(self, kind: str, tile: int, name: str, table: Any) -> None:
+        """Write a table at once, under a name that only the caller uses (so safe from several threads)"""
+        import pyarrow as pa
+
+        if len(table):
+            folder = self.directory / kind / str(tile)
+            folder.mkdir(parents=True, exist_ok=True)
+            with pa.ipc.new_file(folder / f"{name}.arrow", table.schema) as writer:
+                writer.write_table(table)
+
     def read(self, kind: str, tile: int) -> Optional[Any]:
         import pyarrow as pa
 
@@ -275,10 +286,12 @@ def _partition(batches: Iterator[Tuple[Any, Any, Any]], tiling: Tiling, scratch:
     return reaching
 
 
-def _find(tile: int, tiling: Tiling, scratch: _Scratch, first_node: int, crossings: bool) -> Optional[Any]:
+def _find(tile: int, tiling: Tiling, scratch: _Scratch, crossings: bool) -> Optional[Any]:
     """Find the nodes that lie in one tile, and note what each edge needs to know of them.
 
-    Returns the coordinates of the tile's nodes, numbered from ``first_node``.
+    Returns the coordinates of the tile's nodes. In what is noted for edges a
+    node is named by this tile and its position among them, since its id is
+    not known until the tiles before this one have been counted.
     """
     import pyarrow as pa
 
@@ -313,9 +326,12 @@ def _find(tile: int, tiling: Tiling, scratch: _Scratch, first_node: int, crossin
 
     # one node for each distinct place: an end and a crossing at the same place share it
     node_xy, index = _distinct(np.concatenate(places))
-    node = first_node + index
+    node = index
+    here = np.full(len(mine), tile, dtype=np.int64)
 
-    end_tables = pa.table({ROW: rows[mine // 2], "end": (mine % 2).astype(np.int8), "node": node[: len(mine)]})
+    end_tables = pa.table(
+        {ROW: rows[mine // 2], "end": (mine % 2).astype(np.int8), "tile": here, "node": node[: len(mine)]}
+    )
     cut_tables = pa.table(
         {
             ROW: rows[cut_edge],
@@ -323,19 +339,22 @@ def _find(tile: int, tiling: Tiling, scratch: _Scratch, first_node: int, crossin
             "measure": cut_measure,
             "x": node_xy[index[cut_place], 0] if len(cut_place) else np.zeros(0),
             "y": node_xy[index[cut_place], 1] if len(cut_place) else np.zeros(0),
+            "tile": np.full(len(cut_place), tile, dtype=np.int64),
             "node": node[cut_place],
         }
     )
     for kind, records, owner in (("ends", end_tables, home[mine // 2]), ("cuts", cut_tables, home[cut_edge])):
         for target in np.unique(owner):
-            scratch.add(kind, int(target), records.filter(pa.array(owner == target)))
-    scratch.flush()
+            scratch.put(kind, int(target), f"from-{tile}", records.filter(pa.array(owner == target)))
     scratch.discard("reach", tile)
     return node_xy
 
 
-def _cut(tile: int, scratch: _Scratch, first_edge: int) -> Optional[Any]:
-    """Cut the edges that belong to one tile at the places found for them"""
+def _cut(tile: int, scratch: _Scratch, first_node: Any) -> Optional[Any]:
+    """Cut the edges that belong to one tile at the places found for them.
+
+    ``first_node`` gives the id of the first node of each tile. The edges are returned without ids.
+    """
     import pyarrow as pa
 
     table = scratch.read("own", tile)
@@ -347,8 +366,9 @@ def _cut(tile: int, scratch: _Scratch, first_edge: int) -> Optional[Any]:
     which = position.get_indexer(ends[ROW].to_numpy())
     at_end = ends["end"].to_numpy().astype(bool)
     src, dst = np.full(len(rows), -1, dtype=np.int64), np.full(len(rows), -1, dtype=np.int64)
-    src[which[~at_end]] = ends["node"].to_numpy()[~at_end]
-    dst[which[at_end]] = ends["node"].to_numpy()[at_end]
+    end_node = first_node[ends["tile"].to_numpy()] + ends["node"].to_numpy()
+    src[which[~at_end]] = end_node[~at_end]
+    dst[which[at_end]] = end_node[at_end]
     if (src < 0).any() or (dst < 0).any():  # pragma: no cover
         raise RuntimeError("an edge is missing an end node: this is a fault in snkit")
 
@@ -357,6 +377,7 @@ def _cut(tile: int, scratch: _Scratch, first_edge: int) -> Optional[Any]:
         coords, offsets, parent = lines.coords, lines.offsets, np.arange(len(rows))
     else:
         found = cuts.to_pandas()
+        found["node"] = first_node[found["tile"].to_numpy()] + found["node"].to_numpy()
         found["edge"] = position.get_indexer(found[ROW].to_numpy())
         found["seg"] = lines.offsets[found["edge"].to_numpy()] + found["vertex"].to_numpy()
         found = found.sort_values(["edge", "seg", "measure", "node"], kind="stable")
@@ -373,12 +394,7 @@ def _cut(tile: int, scratch: _Scratch, first_edge: int) -> Optional[Any]:
         )
     attributes = table.drop_columns([ROW, GEOM]).take(pa.array(parent))
     geometry, field = sio.geometry_array(LineArray(coords, offsets), "separated")
-    columns = {
-        ID: pa.array(np.arange(first_edge, first_edge + len(parent), dtype=np.uint64)),
-        FROM: pa.array(src.astype(np.uint64)),
-        TO: pa.array(dst.astype(np.uint64)),
-    }
-    out = pa.table(columns)
+    out = pa.table({FROM: pa.array(src.astype(np.uint64)), TO: pa.array(dst.astype(np.uint64))})
     for column in attributes.column_names:
         out = out.append_column(attributes.schema.field(column), attributes[column])
     for kind in ("own", "ends", "cuts"):
@@ -386,21 +402,73 @@ def _cut(tile: int, scratch: _Scratch, first_edge: int) -> Optional[Any]:
     return out.append_column(field, geometry)
 
 
+class _Pool:
+    """Run work on tiles, one at a time here or several at once in other processes.
+
+    Other processes, not threads: much of the work on a tile is done in
+    Python, which runs one thread at a time.
+    """
+
+    def __init__(self, workers: int):
+        self.workers = max(1, workers)
+        self.pool = None
+        if self.workers > 1:
+            import multiprocessing
+
+            self.pool = ProcessPoolExecutor(self.workers, mp_context=multiprocessing.get_context("spawn"))
+
+    def __enter__(self) -> "_Pool":
+        return self
+
+    def __exit__(self, *error: Any) -> None:
+        if self.pool is not None:
+            self.pool.shutdown()
+
+    def in_order(self, work: Any, count: int, *arguments: Any) -> Iterator[Any]:
+        """Results of ``work(0, ...)``, ``work(1, ...)``, ... in order.
+
+        No more than a few results are ever waiting to be used, so that what
+        is held in memory does not grow with the number of tiles.
+        """
+        if self.pool is None:
+            for item in range(count):
+                yield work(item, *arguments)
+            return
+        waiting: List[Any] = []
+        for item in range(count):
+            waiting.append(self.pool.submit(work, item, *arguments))
+            if len(waiting) >= 2 * self.workers:
+                yield waiting.pop(0).result()
+        for future in waiting:
+            yield future.result()
+
+
+def _nodes_table(ids: Any, xy: Any, crs: Any) -> Any:
+    import pyarrow as pa
+
+    geometry, field = sio.geometry_array(PointArray(xy), "separated")
+    table = pa.Table.from_arrays([pa.array(ids), geometry], schema=pa.schema([pa.field(ID, pa.uint64()), field]))
+    return table.replace_schema_metadata({b"geo": sio.geo_metadata("points", crs)})
+
+
 def build_network(
     source: Any,
     destination: Any,
     max_tile_edges: int = 250_000,
     split_at_crossings: bool = True,
+    tolerance: float = 0,
     column: Optional[str] = None,
     layer: Optional[str] = None,
     invalid: str = "raise",
     workdir: Optional[Any] = None,
+    workers: int = 1,
 ) -> Built:
     """Build a network from lines, file to file, without holding it all in memory.
 
     A node is made at each distinct end of a line and, with
     ``split_at_crossings``, wherever lines cross or one ends on another; edges
-    are cut there. Ends and crossings are matched exactly, with no tolerance.
+    are cut there. Ends and crossings are matched exactly; nodes that end up
+    within ``tolerance`` of each other are then merged, if one is given.
     Attributes of each line are copied to the edges cut from it.
 
     Parameters
@@ -416,6 +484,12 @@ def build_network(
         About how many edges to work on at once: this sets the memory needed.
         The area is divided, finely where edges are dense and coarsely where
         they are sparse, into tiles of no more than about this many edges.
+    tolerance
+        Merge nodes within this distance of each other once the network is
+        built (see :func:`snkit.tiled.merge_nodes`). By default, none.
+    workers
+        How many tiles to work on at once, each in a process of its own.
+        Memory needed grows in proportion.
     column
         The geometry column, if the source does not say which it is.
     layer
@@ -516,34 +590,278 @@ def build_network(
 
         node_count = edge_count = 0
         nodes_path, edges_path = destination / "nodes.parquet", destination / "edges.parquet"
-        writer = None
-        for tile in range(tiling.count):
-            xy = _find(tile, tiling, scratch, node_count, split_at_crossings)
-            if xy is None or len(xy) == 0:
-                continue
-            geometry, field = sio.geometry_array(PointArray(xy), "separated")
-            ids = pa.array(np.arange(node_count, node_count + len(xy), dtype=np.uint64))
-            table = pa.Table.from_arrays([ids, geometry], schema=pa.schema([pa.field(ID, pa.uint64()), field]))
-            table = table.replace_schema_metadata({b"geo": sio.geo_metadata("points", crs)})
-            writer = writer or pq.ParquetWriter(nodes_path, table.schema)
-            writer.write_table(table)
-            node_count += len(xy)
-        if writer is not None:
-            writer.close()
+        first_node = np.zeros(tiling.count, dtype=np.int64)
+        with _Pool(workers) as pool:
+            writer = None
+            found = pool.in_order(_find, tiling.count, tiling, scratch, split_at_crossings)
+            for tile, xy in enumerate(found):
+                first_node[tile] = node_count
+                if xy is None or len(xy) == 0:
+                    continue
+                table = _nodes_table(np.arange(node_count, node_count + len(xy), dtype=np.uint64), xy, crs)
+                writer = writer or pq.ParquetWriter(nodes_path, table.schema)
+                writer.write_table(table)
+                node_count += len(xy)
+            if writer is not None:
+                writer.close()
 
-        writer = None
-        for tile in range(tiling.count):
-            table = _cut(tile, scratch, edge_count)
-            if table is None:
-                continue
-            table = table.replace_schema_metadata({b"geo": sio.geo_metadata("lines", crs)})
-            writer = writer or pq.ParquetWriter(edges_path, table.schema)
-            writer.write_table(table.cast(writer.schema))
-            edge_count += len(table)
-        if writer is not None:
-            writer.close()
+            writer = None
+            for table in pool.in_order(_cut, tiling.count, scratch, first_node):
+                if table is None:
+                    continue
+                ids = pa.array(np.arange(edge_count, edge_count + len(table), dtype=np.uint64))
+                table = table.add_column(0, ID, ids)
+                table = table.replace_schema_metadata({b"geo": sio.geo_metadata("lines", crs)})
+                writer = writer or pq.ParquetWriter(edges_path, table.schema)
+                writer.write_table(table.cast(writer.schema))
+                edge_count += len(table)
+            if writer is not None:
+                writer.close()
     finally:
         shutil.rmtree(scratch_dir, ignore_errors=True)
     if edge_count == 0:
         raise ValueError("the source has no lines to build a network from")
-    return Built(nodes_path, edges_path, node_count, edge_count, tiling.count, largest)
+    built = Built(nodes_path, edges_path, node_count, edge_count, tiling.count, largest)
+    if tolerance:
+        # join ends that nearly meet, as snkit.from_edges does with a tolerance
+        merged = merge_nodes(built, destination / "merging", tolerance, max_tile_edges, workdir=workdir)
+        for path in (merged.nodes, merged.edges):
+            path.replace(destination / path.name)
+        (destination / "merging").rmdir()
+        built = Built(nodes_path, edges_path, merged.node_count, merged.edge_count, tiling.count, largest)
+    return built
+
+
+# ---------------------------------------------------------------------------
+# Operations on a network that is already on disk
+
+
+def open_network(network: Any) -> Built:
+    """A network on disk: a :class:`Built`, or a directory holding ``nodes.parquet`` and ``edges.parquet``"""
+    import pyarrow.parquet as pq
+
+    if isinstance(network, Built):
+        return network
+    nodes, edges = Path(network) / "nodes.parquet", Path(network) / "edges.parquet"
+    node_file, edge_file = pq.ParquetFile(nodes), pq.ParquetFile(edges)
+    return Built(nodes, edges, node_file.metadata.num_rows, edge_file.metadata.num_rows, node_file.num_row_groups, 0)
+
+
+def _row_groups(path: Path) -> Iterator[Any]:
+    import pyarrow.parquet as pq
+
+    file = pq.ParquetFile(path)
+    for group in range(file.num_row_groups):
+        yield file.read_row_group(group)
+
+
+def _rewrite(source: Path, destination: Path, change: Any) -> int:
+    """Copy a file row group by row group, passing each through ``change``; returns the rows written"""
+    import pyarrow.parquet as pq
+
+    writer, rows = None, 0
+    for table in _row_groups(source):
+        table = change(table)
+        writer = writer or pq.ParquetWriter(destination, table.schema)
+        writer.write_table(table)
+        rows += len(table)
+    if writer is not None:
+        writer.close()
+    return rows
+
+
+def label_components(network: Any, destination: Any, column: str = "component") -> Built:
+    """Number the connected parts of a network on disk, as :func:`snkit.label_components` does in memory.
+
+    Writes new ``nodes.parquet`` and ``edges.parquet`` in ``destination`` with
+    a column added that numbers the connected part each node and edge is in,
+    from 0 in order of the lowest node id in each part.
+
+    Connectivity is a property of the whole network, so this cannot be done
+    tile by tile. The edges are read through once in batches, joining the
+    parts their ends are in, with twelve bytes held in memory for each node id
+    (about 1 GB for a network of 80 million nodes). Node ids must not be far
+    larger than the number of nodes, as is so for a network made by
+    :func:`snkit.build_network`.
+    """
+    import pyarrow as pa
+
+    built = open_network(network)
+    destination = Path(destination)
+    destination.mkdir(parents=True, exist_ok=True)
+    highest = max((int(pa.compute.max(table[ID]).as_py()) for table in _row_groups(built.nodes)), default=-1)
+    parent = np.arange(highest + 1, dtype=np.uint32)
+    for table in _row_groups(built.edges):
+        _native.components_link(parent, table[FROM].to_numpy().astype(np.int64), table[TO].to_numpy().astype(np.int64))
+    _native.components_settle(parent)
+
+    # number the parts in order of their lowest node, counting only ids that are in use
+    present = np.zeros(len(parent), dtype=bool)
+    for table in _row_groups(built.nodes):
+        present[table[ID].to_numpy()] = True
+    number = np.cumsum(present & (parent == np.arange(len(parent)))) - 1
+
+    def labelled(key: str) -> Any:
+        def change(table: Any) -> Any:
+            part = number[parent[table[key].to_numpy()]]
+            at = table.schema.get_field_index(GEOM)
+            return table.add_column(at, column, pa.array(part))
+
+        return change
+
+    nodes, edges = destination / "nodes.parquet", destination / "edges.parquet"
+    node_count = _rewrite(built.nodes, nodes, labelled(ID))
+    edge_count = _rewrite(built.edges, edges, labelled(FROM))
+    return Built(nodes, edges, node_count, edge_count, built.tiles, built.largest_tile)
+
+
+def _pairs_in(tile: int, tiling: Tiling, scratch: _Scratch, tolerance: float) -> Optional[Any]:
+    """Pairs of near nodes that it falls to one tile to report"""
+    table = scratch.read("near", tile)
+    scratch.discard("near", tile)
+    if table is None:
+        return None
+    ids = table[ID].to_numpy()
+    xy = np.column_stack([table["x"].to_numpy(), table["y"].to_numpy()])
+    a, b = K.point_pairs(xy, tolerance)
+    low = np.where(ids[a] < ids[b], a, b)
+    mine = tiling.owners(xy[low]) == tile
+    a, b = a[mine], b[mine]
+    return pd.DataFrame({"a": ids[a], "b": ids[b], "ax": xy[a, 0], "ay": xy[a, 1], "bx": xy[b, 0], "by": xy[b, 1]})
+
+
+def _near_pairs(built: Built, tolerance: float, max_tile_nodes: int, scratch: _Scratch, workers: int) -> Any:
+    """Pairs of nodes within tolerance of each other, found tile by tile.
+
+    Tiles overlap by the tolerance: a node is given to every tile within
+    tolerance of it, and a pair is reported by the tile that the node with
+    the lower id lies in, so each pair is found once.
+    """
+    import pyarrow as pa
+
+    groups = sio.parquet_row_groups(built.nodes)
+    if _sorted_in_space(groups):
+        tiling = Tiling.plan(_sample_from_statistics(groups), built.node_count, max_tile_nodes)
+    else:
+        sample = _Reservoir()
+        for table in _row_groups(built.nodes):
+            sample.add(_native.read_geometry(table.select([GEOM]), "points", GEOM)[0])
+        tiling = Tiling.plan(sample.xy, built.node_count, max_tile_nodes)
+
+    for table in _row_groups(built.nodes):
+        xy = _native.read_geometry(table.select([GEOM]), "points", GEOM)[0]
+        ids = table[ID].to_numpy().astype(np.int64)
+        row, tile = tiling.reaches(np.column_stack([xy - tolerance, xy + tolerance]))
+        order = np.argsort(tile, kind="stable")
+        row, tile = row[order], tile[order]
+        first = np.concatenate([[0], np.flatnonzero(np.diff(tile)) + 1, [len(tile)]])
+        for start, end in zip(first[:-1], first[1:]):
+            chosen = row[start:end]
+            scratch.add("near", int(tile[start]), pa.table({ID: ids[chosen], "x": xy[chosen, 0], "y": xy[chosen, 1]}))
+    scratch.flush()
+
+    with _Pool(workers) as pool:
+        each = pool.in_order(_pairs_in, tiling.count, tiling, scratch, tolerance)
+        found = [pairs for pairs in each if pairs is not None and len(pairs)]
+    columns = ["a", "b", "ax", "ay", "bx", "by"]
+    return pd.concat(found, ignore_index=True) if found else pd.DataFrame({c: [] for c in columns})
+
+
+def merge_nodes(
+    network: Any,
+    destination: Any,
+    tolerance: float,
+    max_tile_nodes: int = 500_000,
+    position: str = "centroid",
+    workdir: Optional[Any] = None,
+    workers: int = 1,
+) -> Built:
+    """Merge nodes of a network on disk that are within ``tolerance`` of each
+    other, as :func:`snkit.merge_nodes` does in memory.
+
+    Writes new ``nodes.parquet`` and ``edges.parquet`` in ``destination``.
+    Nodes are merged in chains. The merged node keeps the lowest id of its
+    members and their attributes, and sits at their centroid, or with
+    ``position="first"`` where the member with the lowest id was. Ends of edges move with their
+    nodes; an edge whose two ends merge into one node is dropped if it was no
+    longer than the tolerance.
+
+    Near nodes are found tile by tile, in tiles of about ``max_tile_nodes``
+    that overlap by the tolerance. What is then held in memory is only the
+    nodes that are to be merged, while both files are rewritten a row group
+    at a time.
+    """
+    import pyarrow as pa
+
+    if position not in ("centroid", "first"):
+        raise ValueError("position must be 'centroid' or 'first'")
+    built = open_network(network)
+    destination = Path(destination)
+    destination.mkdir(parents=True, exist_ok=True)
+    crs = sio._crs(sio.read_parquet(built.nodes).schema, GEOM)
+    if tolerance and crs is not None and crs.is_geographic:
+        raise ValueError("this network has a geographic CRS, so a distance would be in degrees: reproject first")
+    scratch_dir = Path(tempfile.mkdtemp(prefix="snkit-", dir=workdir))
+    try:
+        pairs = _near_pairs(built, tolerance, max_tile_nodes, _Scratch(scratch_dir, 4 * max_tile_nodes), workers)
+    finally:
+        shutil.rmtree(scratch_dir, ignore_errors=True)
+
+    # the nodes that take part in a merge, their groups, and where each group's node will sit
+    ends = pd.DataFrame(
+        {
+            ID: np.concatenate([pairs["a"], pairs["b"]]).astype(np.int64),
+            "x": np.concatenate([pairs["ax"], pairs["bx"]]),
+            "y": np.concatenate([pairs["ay"], pairs["by"]]),
+        }
+    ).drop_duplicates(ID)
+    ends = ends.sort_values(ID, ignore_index=True)
+    involved = pd.Index(ends[ID])
+    labels = K.components(len(ends), involved.get_indexer(pairs["a"]), involved.get_indexer(pairs["b"]))
+    keeper = ends[ID].to_numpy()[labels]  # sorted by id, so the label is the member with the lowest id
+    place = ends[["x", "y"]].to_numpy()[labels]
+    if position == "centroid" and len(ends):
+        place = ends.groupby(labels)[["x", "y"]].transform("mean").to_numpy()
+    merged_away = pa.array(ends[ID].to_numpy()[keeper != ends[ID].to_numpy()])
+
+    def change_nodes(table: Any) -> Any:
+        table = table.filter(pa.compute.invert(pa.compute.is_in(table[ID], value_set=merged_away.cast(table[ID].type))))
+        xy = _native.read_geometry(table.select([GEOM]), "points", GEOM)[0].copy()
+        which = involved.get_indexer(table[ID].to_numpy().astype(np.int64))
+        xy[which >= 0] = place[which[which >= 0]]
+        geometry, field = sio.geometry_array(PointArray(xy), "separated")
+        return table.set_column(
+            table.schema.get_field_index(GEOM), table.schema.field(GEOM), geometry.cast(table.schema.field(GEOM).type)
+        )
+
+    def change_edges(table: Any) -> Any:
+        coords, offsets, _, _, _ = _native.read_geometry(table.select([GEOM]), "lines", GEOM)
+        coords = coords.copy()
+        length = K.line_measures(coords, offsets)[2]
+        ends_now = {}
+        for key, vertex in ((FROM, offsets[:-1]), (TO, offsets[1:] - 1)):
+            ids = table[key].to_numpy().astype(np.int64)
+            which = involved.get_indexer(ids)
+            moved = which >= 0
+            coords[vertex[moved]] = place[which[moved]]
+            now = ids.copy()
+            now[moved] = keeper[which[moved]]
+            ends_now[key] = (ids, now)
+        (was_from, now_from), (was_to, now_to) = ends_now[FROM], ends_now[TO]
+        collapsed = (now_from == now_to) & (was_from != was_to)
+        collapsed &= (length <= tolerance) | (K.line_measures(coords, offsets)[2] == 0)
+        keep = np.flatnonzero(~collapsed)
+        geometry, _ = sio.geometry_array(LineArray(coords, offsets).take(keep), "separated")
+        table = table.take(pa.array(keep))
+        for key, values in ((FROM, now_from), (TO, now_to)):
+            at = table.schema.get_field_index(key)
+            table = table.set_column(
+                at, table.schema.field(key), pa.array(values[keep]).cast(table.schema.field(key).type)
+            )
+        at = table.schema.get_field_index(GEOM)
+        return table.set_column(at, table.schema.field(GEOM), geometry.cast(table.schema.field(GEOM).type))
+
+    nodes, edges = destination / "nodes.parquet", destination / "edges.parquet"
+    node_count = _rewrite(built.nodes, nodes, change_nodes)
+    edge_count = _rewrite(built.edges, edges, change_edges)
+    return Built(nodes, edges, node_count, edge_count, built.tiles, built.largest_tile)
