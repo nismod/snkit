@@ -1,0 +1,12 @@
+{
+  "expected": {
+    "group": [0, 1, 0, 1, 2],
+    "is_first": [true, true, false, false, true]
+  },
+  "function": "group_index",
+  "input": {
+    "labels": [0, 1, 0, 1, 4]
+  },
+  "note": "Numbering follows the first item of each group, not the order of the labels.",
+  "title": "Groups whose items are interleaved"
+}

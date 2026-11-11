@@ -1,0 +1,22 @@
+{
+  "expected": {
+    "coords": [[0.0, 0.0], [1.0, 0.0], [1.0, 0.0], [2.0, 0.0], [2.0, 1.0], [2.0, 1.0], [2.0, 2.0], [5.0, 5.0], [6.0, 5.0]],
+    "dst": [4, 5, 1, 3],
+    "offsets": [0, 2, 5, 7, 9],
+    "parent": [0, 0, 0, 1],
+    "src": [0, 4, 5, 2]
+  },
+  "function": "split",
+  "input": {
+    "coords": [[0, 0], [2, 0], [2, 2], [5, 5], [6, 5]],
+    "cut_edge": [0, 0],
+    "cut_node": [4, 5],
+    "cut_seg": [0, 1],
+    "cut_xy": [[1, 0], [2, 1]],
+    "dst": [1, 3],
+    "offsets": [0, 3, 5],
+    "src": [0, 2]
+  },
+  "note": "Cuts are given in order along the edge. cut_seg is the position, in the whole coordinate array, of the vertex that starts the segment cut. Pieces take the place of their edge; the second edge follows unchanged.",
+  "title": "Two cuts on one edge, and an edge left alone"
+}

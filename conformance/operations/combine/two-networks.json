@@ -1,0 +1,44 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "source": "rail", "to_id": 1},
+      {"from_id": 2, "geometry": "LINESTRING (1 0, 1 1)", "id": 1, "source": "road", "to_id": 3},
+      {"from_id": 3, "geometry": "LINESTRING (1 1, 2 1)", "id": 2, "source": "road", "to_id": 4}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0, "source": "rail"},
+      {"geometry": "POINT (1 0)", "id": 1, "source": "rail"},
+      {"geometry": "POINT (1 0)", "id": 2, "source": "road"},
+      {"geometry": "POINT (1 1)", "id": 3, "source": "road"},
+      {"geometry": "POINT (2 1)", "id": 4, "source": "road"}
+    ]
+  },
+  "input": {
+    "networks": {
+      "rail": {
+        "edges": [
+          {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "to_id": 1}
+        ],
+        "nodes": [
+          {"geometry": "POINT (0 0)", "id": 0},
+          {"geometry": "POINT (1 0)", "id": 1}
+        ]
+      },
+      "road": {
+        "edges": [
+          {"from_id": 0, "geometry": "LINESTRING (1 0, 1 1)", "id": 0, "to_id": 1},
+          {"from_id": 1, "geometry": "LINESTRING (1 1, 2 1)", "id": 1, "to_id": 2}
+        ],
+        "nodes": [
+          {"geometry": "POINT (1 0)", "id": 0},
+          {"geometry": "POINT (1 1)", "id": 1},
+          {"geometry": "POINT (2 1)", "id": 2}
+        ]
+      }
+    }
+  },
+  "note": "The networks are placed in one table, in order, without being connected, even where they touch. The first keeps its ids; ids of the second are shifted to follow on. A source column names the network each feature came from.",
+  "operation": "combine",
+  "parameters": {},
+  "title": "Two networks side by side"
+}

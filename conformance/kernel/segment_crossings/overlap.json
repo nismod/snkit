@@ -1,0 +1,16 @@
+{
+  "expected": {
+    "frac_a": [0.5, 1.0],
+    "frac_b": [0.0, 0.5],
+    "seg_a": [0, 0],
+    "seg_b": [2, 2],
+    "xy": [[1.0, 0.0], [2.0, 0.0]]
+  },
+  "function": "segment_crossings",
+  "input": {
+    "coords": [[0, 0], [2, 0], [1, 0], [3, 0]],
+    "offsets": [0, 2, 4]
+  },
+  "note": "Segments that share a stretch give a meeting for each end of one lying on the other: here the start of the second on the first, and the end of the first on the second.",
+  "title": "Segments that overlap along a line"
+}

@@ -1,0 +1,32 @@
+{
+  "expected": {
+    "edges": [],
+    "nodes": []
+  },
+  "input": {
+    "networks": {
+      "a": {
+        "edges": [
+          {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "to_id": 1}
+        ],
+        "nodes": [
+          {"geometry": "POINT (0 0)", "id": 0},
+          {"geometry": "POINT (1 0)", "id": 1}
+        ]
+      },
+      "b": {
+        "edges": [
+          {"from_id": 0, "geometry": "LINESTRING (1 0, 2 0)", "id": 0, "to_id": 1}
+        ],
+        "nodes": [
+          {"geometry": "POINT (1 0)", "id": 0},
+          {"geometry": "POINT (2 0)", "id": 1}
+        ]
+      }
+    }
+  },
+  "note": "Networks that only touch at a node share no edge, and the node is used by an edge of a, so it is not an isolated node in common either: the result is empty.",
+  "operation": "intersection",
+  "parameters": {},
+  "title": "Nothing in common"
+}

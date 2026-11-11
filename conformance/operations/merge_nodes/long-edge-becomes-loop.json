@@ -1,0 +1,25 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0.25 0, 0 2, 0.5 2, 0.25 0)", "id": 0, "to_id": 0}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0.25 0)", "id": 0}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 0 2, 0.5 2, 0.5 0)", "id": 0, "to_id": 1}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (0.5 0)", "id": 1}
+    ]
+  },
+  "note": "Edge 0 joins the two nodes that merge but is longer than the tolerance, so it is kept, as a self-loop.",
+  "operation": "merge_nodes",
+  "parameters": {
+    "tolerance": 0.5
+  },
+  "title": "A long edge between merged nodes"
+}

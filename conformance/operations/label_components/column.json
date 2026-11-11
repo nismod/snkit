@@ -1,0 +1,32 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 2)", "id": 0, "part": 0, "to_id": 1},
+      {"from_id": 2, "geometry": "LINESTRING (0 2, 2 0)", "id": 1, "part": 1, "to_id": 3}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0, "part": 0},
+      {"geometry": "POINT (2 2)", "id": 1, "part": 0},
+      {"geometry": "POINT (0 2)", "id": 2, "part": 1},
+      {"geometry": "POINT (2 0)", "id": 3, "part": 1}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 2)", "id": 0, "to_id": 1},
+      {"from_id": 2, "geometry": "LINESTRING (0 2, 2 0)", "id": 1, "to_id": 3}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (2 2)", "id": 1},
+      {"geometry": "POINT (0 2)", "id": 2},
+      {"geometry": "POINT (2 0)", "id": 3}
+    ]
+  },
+  "note": "column sets the name of the column added. Edges that cross without a node are not connected.",
+  "operation": "label_components",
+  "parameters": {
+    "column": "part"
+  },
+  "title": "Naming the column"
+}

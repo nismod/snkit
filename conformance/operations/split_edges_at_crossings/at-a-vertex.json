@@ -1,0 +1,33 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 1)", "id": 2, "to_id": 4},
+      {"from_id": 4, "geometry": "LINESTRING (1 1, 2 0)", "id": 3, "to_id": 1},
+      {"from_id": 2, "geometry": "LINESTRING (0 2, 1 1)", "id": 4, "to_id": 4},
+      {"from_id": 4, "geometry": "LINESTRING (1 1, 2 2)", "id": 5, "to_id": 3}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (2 0)", "id": 1},
+      {"geometry": "POINT (0 2)", "id": 2},
+      {"geometry": "POINT (2 2)", "id": 3},
+      {"geometry": "POINT (1 1)", "id": 4}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 1, 2 0)", "id": 0, "to_id": 1},
+      {"from_id": 2, "geometry": "LINESTRING (0 2, 1 1, 2 2)", "id": 1, "to_id": 3}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (2 0)", "id": 1},
+      {"geometry": "POINT (0 2)", "id": 2},
+      {"geometry": "POINT (2 2)", "id": 3}
+    ]
+  },
+  "note": "Both edges are split at the corner where they touch. The vertex is not repeated.",
+  "operation": "split_edges_at_crossings",
+  "parameters": {},
+  "title": "A crossing at a vertex of both edges"
+}

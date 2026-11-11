@@ -1,0 +1,12 @@
+{
+  "expected": {
+    "nearest": [0]
+  },
+  "function": "nearest_points",
+  "input": {
+    "targets": [[2, 0], [0, 0], [1, 1]],
+    "xy": [[1, 0]]
+  },
+  "note": "The earliest is chosen.",
+  "title": "Two targets equally near"
+}

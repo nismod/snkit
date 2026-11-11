@@ -1,0 +1,28 @@
+{
+  "expected": {
+    "matches": [
+      {"edge_a": 0, "edge_b": 1, "measure_a": 1.414213562373, "measure_b": 1.414213562373, "x": 1.0, "y": 1.0},
+      {"edge_a": 0, "edge_b": 2, "measure_a": 1.414213562373, "measure_b": 1.0, "x": 1.0, "y": 1.0},
+      {"edge_a": 1, "edge_b": 2, "measure_a": 1.414213562373, "measure_b": 1.0, "x": 1.0, "y": 1.0}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 2)", "id": 0, "to_id": 1},
+      {"from_id": 2, "geometry": "LINESTRING (0 2, 2 0)", "id": 1, "to_id": 3},
+      {"from_id": 4, "geometry": "LINESTRING (0 1, 2 1)", "id": 2, "to_id": 5}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (2 2)", "id": 1},
+      {"geometry": "POINT (0 2)", "id": 2},
+      {"geometry": "POINT (2 0)", "id": 3},
+      {"geometry": "POINT (0 1)", "id": 4},
+      {"geometry": "POINT (2 1)", "id": 5}
+    ]
+  },
+  "note": "Each pair of edges is reported: three crossings at the same place.",
+  "operation": "find_crossings",
+  "parameters": {},
+  "title": "Three edges through one point"
+}

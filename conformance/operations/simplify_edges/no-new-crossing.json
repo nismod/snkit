@@ -1,0 +1,32 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 0.5, 4 0)", "id": 0, "to_id": 1},
+      {"from_id": 2, "geometry": "LINESTRING (2 -1, 2 0.25)", "id": 1, "to_id": 3}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (4 0)", "id": 1},
+      {"geometry": "POINT (2 -1)", "id": 2},
+      {"geometry": "POINT (2 0.25)", "id": 3}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 0.5, 4 0)", "id": 0, "to_id": 1},
+      {"from_id": 2, "geometry": "LINESTRING (2 -1, 2 0.25)", "id": 1, "to_id": 3}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (4 0)", "id": 1},
+      {"geometry": "POINT (2 -1)", "id": 2},
+      {"geometry": "POINT (2 0.25)", "id": 3}
+    ]
+  },
+  "note": "Removing the bump from edge 0 would make it cross edge 1, which it goes around. So edge 0 keeps its shape.",
+  "operation": "simplify_edges",
+  "parameters": {
+    "tolerance": 1
+  },
+  "title": "Simplifying must not create a crossing"
+}

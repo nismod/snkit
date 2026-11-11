@@ -1,0 +1,14 @@
+{
+  "expected": {
+    "edges": [],
+    "nodes": []
+  },
+  "input": {
+    "edges": [],
+    "nodes": []
+  },
+  "note": "An empty network gives an empty network.",
+  "operation": "split_edges_at_crossings",
+  "parameters": {},
+  "title": "An empty network"
+}

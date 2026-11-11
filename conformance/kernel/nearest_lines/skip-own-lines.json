@@ -1,0 +1,21 @@
+{
+  "expected": {
+    "distance": [1.0],
+    "frac": [0.5],
+    "line": [1],
+    "point": [0],
+    "vertex": [2],
+    "xy": [[2.0, 1.0]]
+  },
+  "function": "nearest_lines",
+  "input": {
+    "coords": [[0, 0], [2, 0], [0, 1], [4, 1]],
+    "dst": [1, 3],
+    "node": [1],
+    "offsets": [0, 2, 4],
+    "src": [0, 2],
+    "xy": [[2, 0]]
+  },
+  "note": "The point is node 1, an end of line 0. With node, src and dst given, line 0 is passed over and the nearest other line is found.",
+  "title": "Passing over a node's own lines"
+}

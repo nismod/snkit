@@ -1,0 +1,25 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1.025 0)", "id": 0, "to_id": 1},
+      {"from_id": 1, "geometry": "LINESTRING (1.025 0, 2 0)", "id": 1, "to_id": 3}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (1.025 0)", "id": 1},
+      {"geometry": "POINT (2 0)", "id": 3}
+    ]
+  },
+  "input": {
+    "lines": [
+      {"geometry": "LINESTRING (0 0, 1 0)"},
+      {"geometry": "LINESTRING (1.05 0, 2 0)"}
+    ]
+  },
+  "note": "Ends within the tolerance become one node at their centroid, which keeps the id of the first. The same as merge_nodes afterwards.",
+  "operation": "from_edges",
+  "parameters": {
+    "tolerance": 0.1
+  },
+  "title": "Ends that nearly meet, with a tolerance"
+}

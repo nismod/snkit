@@ -1,0 +1,27 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 1, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "to_id": 0}
+    ],
+    "nodes": [
+      {"geometry": "POINT (1 0)", "id": 0},
+      {"geometry": "POINT (0 0)", "id": 1}
+    ]
+  },
+  "input": {
+    "lines": [
+      {"geometry": "LINESTRING (0 0, 0.9 0)"},
+      {"geometry": "LINESTRING (0.9 0, 1.1 0)"}
+    ],
+    "points": [
+      {"geometry": "POINT (1 0)"}
+    ]
+  },
+  "note": "Both ends of the short line are attached to the same node, which leaves it no length. With invalid=\"drop\" it is left out.",
+  "operation": "from_nodes_and_edges",
+  "parameters": {
+    "invalid": "drop",
+    "tolerance": 0.25
+  },
+  "title": "A line shorter than the tolerance"
+}

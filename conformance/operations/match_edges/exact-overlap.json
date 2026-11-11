@@ -1,0 +1,25 @@
+{
+  "expected": {
+    "matches": [
+      {"distance": 0.0, "edge_a": 0, "edge_b": 1, "end_a": 10.0, "end_b": 6.0, "reversed": false, "start_a": 4.0, "start_b": 0.0}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 10 0)", "id": 0, "to_id": 1},
+      {"from_id": 2, "geometry": "LINESTRING (4 0, 14 0)", "id": 1, "to_id": 3}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (10 0)", "id": 1},
+      {"geometry": "POINT (4 0)", "id": 2},
+      {"geometry": "POINT (14 0)", "id": 3}
+    ]
+  },
+  "note": "With a tolerance of 0, only a stretch that both edges share exactly is matched.",
+  "operation": "match_edges",
+  "parameters": {
+    "tolerance": 0
+  },
+  "title": "Edges that lie on the same line"
+}

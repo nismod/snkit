@@ -1,0 +1,26 @@
+{
+  "expected": {
+    "edges": [
+      {"cost": null, "from_id": 0, "geometry": "LINESTRING (0 0, 1 0, 2 0)", "id": 2, "kind": "road", "name": null, "to_id": 2}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (2 0)", "id": 2}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"cost": 2, "from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "kind": "road", "name": "A1", "to_id": 1},
+      {"cost": 3, "from_id": 1, "geometry": "LINESTRING (1 0, 2 0)", "id": 1, "kind": "road", "name": "B2", "to_id": 2}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (1 0)", "id": 1},
+      {"geometry": "POINT (2 0)", "id": 2}
+    ]
+  },
+  "note": "By default a merged edge keeps a value only where all its members agree: kind is kept, name and cost are null.",
+  "operation": "merge_edges",
+  "parameters": {},
+  "title": "Attributes of a merged edge"
+}

@@ -1,0 +1,24 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "from_id_original": "node_0", "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "to_id": 1, "to_id_original": "node_1"}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0, "id_original": "node_0"},
+      {"geometry": "POINT (1 0)", "id": 1, "id_original": "node_1"}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": "node_0", "geometry": "LINESTRING (0 0, 1 0)", "to_id": "node_1"}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": "node_0"},
+      {"geometry": "POINT (1 0)", "id": "node_1"}
+    ]
+  },
+  "note": "Ids are converted to integers in order of the nodes table. The originals are kept as id_original, from_id_original and to_id_original.",
+  "operation": "from_topology",
+  "parameters": {},
+  "title": "Tables that refer to each other by text ids"
+}

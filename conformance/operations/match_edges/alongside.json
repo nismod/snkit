@@ -1,0 +1,25 @@
+{
+  "expected": {
+    "matches": [
+      {"distance": 0.1, "edge_a": 0, "edge_b": 1, "end_a": 10.0, "end_b": 6.0, "reversed": false, "start_a": 4.0, "start_b": 0.0}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 10 0)", "id": 0, "to_id": 1},
+      {"from_id": 2, "geometry": "LINESTRING (4 0.1, 14 0.1)", "id": 1, "to_id": 3}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (10 0)", "id": 1},
+      {"geometry": "POINT (4 0.1)", "id": 2},
+      {"geometry": "POINT (14 0.1)", "id": 3}
+    ]
+  },
+  "note": "Edge 1 runs 0.1 from edge 0, from 4 to 10 along edge 0 and from 0 to 6 along itself.",
+  "operation": "match_edges",
+  "parameters": {
+    "tolerance": 0.5
+  },
+  "title": "Two edges that run alongside each other for part of their length"
+}

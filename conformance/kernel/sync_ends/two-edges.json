@@ -1,0 +1,15 @@
+{
+  "expected": {
+    "coords": [[0.0, 0.0], [1.0, 0.0], [1.0, 0.0], [2.0, 0.0]]
+  },
+  "function": "sync_ends",
+  "input": {
+    "coords": [[0, 0], [0.75, 0], [1.25, 0], [2, 0]],
+    "dst": [1, 2],
+    "offsets": [0, 2, 4],
+    "src": [0, 1],
+    "xy": [[0, 0], [1, 0], [2, 0]]
+  },
+  "note": "Both edges are moved to end exactly on the node they share. Ends already in place stay as they are.",
+  "title": "Two edges to one node"
+}

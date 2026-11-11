@@ -1,0 +1,28 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "to_id": 1},
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 2)", "id": 1, "to_id": 2},
+      {"from_id": 1, "geometry": "LINESTRING (1 0, 1 2)", "id": 2, "to_id": 2}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (1 0)", "id": 1},
+      {"geometry": "POINT (1 2)", "id": 2}
+    ]
+  },
+  "input": {
+    "edges": [],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (1 0)", "id": 1},
+      {"geometry": "POINT (1 2)", "id": 2}
+    ]
+  },
+  "note": "With how=\"all\" (the default) every pair of nodes within tolerance is linked: all three sides of the triangle.",
+  "operation": "link_nodes",
+  "parameters": {
+    "tolerance": 2.5
+  },
+  "title": "Every pair within tolerance"
+}

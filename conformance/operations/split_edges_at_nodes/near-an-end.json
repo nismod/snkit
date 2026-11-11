@@ -1,0 +1,28 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 0)", "id": 0, "to_id": 1}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (2 0)", "id": 1},
+      {"geometry": "POINT (2.25 0)", "id": 2}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 0)", "id": 0, "to_id": 1}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (2 0)", "id": 1},
+      {"geometry": "POINT (2.25 0)", "id": 2}
+    ]
+  },
+  "note": "Node 2 is within tolerance of the edge, but the nearest place on it is its end. That is a node near a node, which is for merge_nodes: the edge is not split.",
+  "operation": "split_edges_at_nodes",
+  "parameters": {
+    "tolerance": 0.5
+  },
+  "title": "A node close to the end of an edge"
+}

@@ -1,0 +1,13 @@
+{
+  "expected": {
+    "a": [0],
+    "b": [2]
+  },
+  "function": "point_pairs",
+  "input": {
+    "tolerance": 0,
+    "xy": [[1, 1], [2, 1], [1, 1]]
+  },
+  "note": "With a tolerance of 0 only points at exactly the same place pair up.",
+  "title": "Points at the same place"
+}

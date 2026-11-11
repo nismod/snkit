@@ -1,0 +1,15 @@
+{
+  "expected": {
+    "coords": [[0.0, 0.0], [1.0, 1.0], [2.0, 0.0]]
+  },
+  "function": "sync_ends",
+  "input": {
+    "coords": [[0.25, 0], [1, 1], [2, 0.25]],
+    "dst": [1],
+    "offsets": [0, 3],
+    "src": [0],
+    "xy": [[0, 0], [2, 0]]
+  },
+  "note": "The first and last vertex of the edge are replaced by the positions of its end nodes. Vertices between are untouched.",
+  "title": "Ends moved onto their nodes"
+}

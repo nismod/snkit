@@ -1,0 +1,26 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 1, 4 0)", "id": 0, "to_id": 1}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (4 0)", "id": 1}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0.5, 2 1, 4 0)", "id": 0, "to_id": 1}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (4 0)", "id": 1}
+    ]
+  },
+  "note": "The corner at (2 1) is further than the tolerance from the simplified line and is kept. The vertex at (1 0.5) lies on the simplified line and is removed. The ends never move.",
+  "operation": "simplify_edges",
+  "parameters": {
+    "tolerance": 0.25
+  },
+  "title": "A vertex that matters"
+}

@@ -1,0 +1,41 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "source": "a_west", "to_id": 1},
+      {"from_id": 1, "geometry": "LINESTRING (1 0, 2 0)", "id": 1, "source": "b_east", "to_id": 9}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0, "source": "a_west"},
+      {"geometry": "POINT (1 0)", "id": 1, "source": "a_west"},
+      {"geometry": "POINT (2 0)", "id": 9, "source": "b_east"}
+    ]
+  },
+  "input": {
+    "networks": {
+      "a_west": {
+        "edges": [
+          {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "to_id": 1}
+        ],
+        "nodes": [
+          {"geometry": "POINT (0 0)", "id": 0},
+          {"geometry": "POINT (1 0)", "id": 1}
+        ]
+      },
+      "b_east": {
+        "edges": [
+          {"from_id": 1, "geometry": "LINESTRING (1 0.25, 2 0)", "id": 0, "to_id": 7}
+        ],
+        "nodes": [
+          {"geometry": "POINT (1 0.25)", "id": 1},
+          {"geometry": "POINT (2 0)", "id": 7}
+        ]
+      }
+    }
+  },
+  "note": "With on=\"id\" nodes with the same id in different networks are the same node, wherever they are. Node 1 of the second network is node 1 of the first, and its edge moves to the first's position.",
+  "operation": "stitch",
+  "parameters": {
+    "on": "id"
+  },
+  "title": "Matching nodes by id"
+}

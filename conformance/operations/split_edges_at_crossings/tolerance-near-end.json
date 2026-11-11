@@ -1,0 +1,33 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 -0.25)", "id": 2, "to_id": 3},
+      {"from_id": 3, "geometry": "LINESTRING (2 -0.25, 4 0)", "id": 3, "to_id": 1},
+      {"from_id": 2, "geometry": "LINESTRING (2 2, 2 -0.25)", "id": 1, "to_id": 3}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (4 0)", "id": 1},
+      {"geometry": "POINT (2 2)", "id": 2},
+      {"geometry": "POINT (2 -0.25)", "id": 3}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 4 0)", "id": 0, "to_id": 1},
+      {"from_id": 2, "geometry": "LINESTRING (2 2, 2 -0.25)", "id": 1, "to_id": 3}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (4 0)", "id": 1},
+      {"geometry": "POINT (2 2)", "id": 2},
+      {"geometry": "POINT (2 -0.25)", "id": 3}
+    ]
+  },
+  "note": "Edge 1 crosses edge 0 only 0.25 short of its own end. With a tolerance of 0.5 the crossing uses that end node: edge 0 is split and bent to pass through it, and no short edge is made.",
+  "operation": "split_edges_at_crossings",
+  "parameters": {
+    "tolerance": 0.5
+  },
+  "title": "A crossing close to an end"
+}

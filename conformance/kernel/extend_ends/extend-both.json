@@ -1,0 +1,16 @@
+{
+  "expected": {
+    "coords": [[0.0, 0.0], [0.25, 0.0], [1.0, 1.0], [2.0, 0.25], [2.0, 0.0]],
+    "offsets": [0, 5]
+  },
+  "function": "extend_ends",
+  "input": {
+    "coords": [[0.25, 0], [1, 1], [2, 0.25]],
+    "dst": [1],
+    "offsets": [0, 3],
+    "src": [0],
+    "xy": [[0, 0], [2, 0]]
+  },
+  "note": "Where an end is not on its node a vertex is added at the node, and the original line is kept whole.",
+  "title": "Both ends extended"
+}

@@ -1,0 +1,28 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 0, 2 2)", "id": 1, "to_id": 1},
+      {"from_id": 1, "geometry": "LINESTRING (2 2, 0 2, 0 0)", "id": 2, "to_id": 0}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (2 2)", "id": 1}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 0, 2 2, 0 2, 0 0)", "id": 0, "to_id": 0}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0}
+    ]
+  },
+  "note": "A loop cut once becomes two edges between its node and the new node.",
+  "operation": "split_edges",
+  "parameters": {
+    "locations": [
+      {"edge": 0, "measure": 4}
+    ]
+  },
+  "title": "A cut on a self-loop"
+}

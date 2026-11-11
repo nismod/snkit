@@ -1,0 +1,29 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 0)", "id": 0, "to_id": 1}
+    ],
+    "lineage": {
+      "edges": [[0, 0]],
+      "nodes": [[0, 0], [1, 1]]
+    },
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (2 0)", "id": 1}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 0)", "id": 0, "to_id": 1},
+      {"from_id": 1, "geometry": "LINESTRING (2 0, 1 0, 0 0)", "id": 1, "to_id": 0}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (2 0)", "id": 1}
+    ]
+  },
+  "note": "Edge 1 joins the same nodes as edge 0 along the same line, in the other direction and with an extra vertex. It duplicates edge 0 and is dropped: the earlier edge is the one kept.",
+  "operation": "drop_duplicate_edges",
+  "parameters": {},
+  "title": "The same line drawn twice"
+}

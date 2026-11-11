@@ -1,0 +1,27 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 2, "geometry": "LINESTRING (0 0, 1.125 0)", "id": 0, "to_id": 1}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0.75 0)", "id": 0},
+      {"geometry": "POINT (1.125 0)", "id": 1},
+      {"geometry": "POINT (0 0)", "id": 2}
+    ]
+  },
+  "input": {
+    "lines": [
+      {"geometry": "LINESTRING (0 0, 1 0)"}
+    ],
+    "points": [
+      {"geometry": "POINT (0.75 0)"},
+      {"geometry": "POINT (1.125 0)"}
+    ]
+  },
+  "note": "An end with more than one node in reach is attached to the nearest.",
+  "operation": "from_nodes_and_edges",
+  "parameters": {
+    "tolerance": 0.5
+  },
+  "title": "Two nodes in reach of one end"
+}

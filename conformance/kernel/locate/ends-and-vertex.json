@@ -1,0 +1,18 @@
+{
+  "expected": {
+    "frac": [0.0, 0.0, 1.0],
+    "vertex": [0, 1, 1],
+    "xy": [[0.0, 0.0], [3.0, 0.0], [3.0, 4.0]]
+  },
+  "function": "locate",
+  "input": {
+    "at": [0, 3, 7],
+    "coords": [[0, 0], [3, 0], [3, 4]],
+    "line": [0, 0, 0],
+    "measure": [0.0, 3.0, 7.0],
+    "offsets": [0, 3],
+    "seglen": [3.0, 4.0, 0.0]
+  },
+  "note": "A place exactly at an interior vertex is given as the start of the segment that leaves it (fraction 0). The end of the line is the end of its last segment (fraction 1).",
+  "title": "The start, a vertex, and the end"
+}

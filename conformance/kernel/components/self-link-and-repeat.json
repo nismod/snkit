@@ -1,0 +1,13 @@
+{
+  "expected": {
+    "labels": [0, 1, 0]
+  },
+  "function": "components",
+  "input": {
+    "a": [1, 2, 0],
+    "b": [1, 0, 2],
+    "n": 3
+  },
+  "note": "Neither changes the grouping.",
+  "title": "A repeated link and a link from an item to itself"
+}

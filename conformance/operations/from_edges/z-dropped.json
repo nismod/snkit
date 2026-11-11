@@ -1,0 +1,20 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "to_id": 1}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (1 0)", "id": 1}
+    ]
+  },
+  "input": {
+    "lines": [
+      {"geometry": "LINESTRING Z (0 0 5, 1 0 7)"}
+    ]
+  },
+  "note": "Z coordinates are dropped.",
+  "operation": "from_edges",
+  "parameters": {},
+  "title": "Lines with Z coordinates"
+}

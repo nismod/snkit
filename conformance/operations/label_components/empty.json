@@ -1,0 +1,14 @@
+{
+  "expected": {
+    "edges": [],
+    "nodes": []
+  },
+  "input": {
+    "edges": [],
+    "nodes": []
+  },
+  "note": "An empty network gives an empty network.",
+  "operation": "label_components",
+  "parameters": {},
+  "title": "An empty network"
+}

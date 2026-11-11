@@ -1,0 +1,34 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0, 2 0)", "id": 4, "to_id": 2},
+      {"from_id": 2, "geometry": "LINESTRING (2 0, 3 1)", "id": 2, "to_id": 3},
+      {"from_id": 2, "geometry": "LINESTRING (2 0, 3 -1)", "id": 3, "to_id": 4}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (2 0)", "id": 2},
+      {"geometry": "POINT (3 1)", "id": 3},
+      {"geometry": "POINT (3 -1)", "id": 4}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "to_id": 1},
+      {"from_id": 1, "geometry": "LINESTRING (1 0, 2 0)", "id": 1, "to_id": 2},
+      {"from_id": 2, "geometry": "LINESTRING (2 0, 3 1)", "id": 2, "to_id": 3},
+      {"from_id": 2, "geometry": "LINESTRING (2 0, 3 -1)", "id": 3, "to_id": 4}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (1 0)", "id": 1},
+      {"geometry": "POINT (2 0)", "id": 2},
+      {"geometry": "POINT (3 1)", "id": 3},
+      {"geometry": "POINT (3 -1)", "id": 4}
+    ]
+  },
+  "note": "Node 2 has three edges and is kept. The two edges of the chain leading to it are merged; the merged edge takes the place of its earliest member in the table.",
+  "operation": "merge_edges",
+  "parameters": {},
+  "title": "Chains stop at junctions"
+}

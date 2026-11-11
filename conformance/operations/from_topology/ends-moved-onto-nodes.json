@@ -1,0 +1,26 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 0.5 0.5, 1 0)", "id": 0, "to_id": 1}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (1 0)", "id": 1}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 0.5 0.5, 1 0.001)", "to_id": 1}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (1 0)", "id": 1}
+    ]
+  },
+  "note": "Each edge end within the tolerance of its node is moved exactly onto it.",
+  "operation": "from_topology",
+  "parameters": {
+    "tolerance": 0.01
+  },
+  "title": "An edge end slightly off its node"
+}

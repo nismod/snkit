@@ -1,0 +1,16 @@
+{
+  "expected": {
+    "coords": [[0.0, 0.0], [1.0, 0.0], [1.0, 0.0], [1.25, 0.0], [2.0, 0.0]],
+    "offsets": [0, 2, 5]
+  },
+  "function": "extend_ends",
+  "input": {
+    "coords": [[0, 0], [1, 0], [1.25, 0], [2, 0]],
+    "dst": [1, 2],
+    "offsets": [0, 2, 4],
+    "src": [0, 1],
+    "xy": [[0, 0], [1, 0], [2, 0]]
+  },
+  "note": "The first edge is already on its nodes and is unchanged. The second gains a vertex at its start, and offsets move along to match.",
+  "title": "Only the ends that need it"
+}

@@ -1,0 +1,25 @@
+{
+  "expected": {
+    "matches": [
+      {"distance": 0.5, "node_a": 1, "node_b": 2}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "to_id": 1},
+      {"from_id": 2, "geometry": "LINESTRING (1.5 0, 3 0)", "id": 1, "to_id": 3}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (1 0)", "id": 1},
+      {"geometry": "POINT (1.5 0)", "id": 2},
+      {"geometry": "POINT (3 0)", "id": 3}
+    ]
+  },
+  "note": "Nodes 1 and 2 are exactly the tolerance apart, which counts as within it. Each pair is reported once, with the node that comes first in the nodes table as node_a.",
+  "operation": "match_nodes",
+  "parameters": {
+    "tolerance": 0.5
+  },
+  "title": "One pair within tolerance"
+}

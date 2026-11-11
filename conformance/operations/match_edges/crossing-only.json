@@ -1,0 +1,23 @@
+{
+  "expected": {
+    "matches": []
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 10 0)", "id": 0, "to_id": 1},
+      {"from_id": 2, "geometry": "LINESTRING (5 -5, 5 5)", "id": 1, "to_id": 3}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (10 0)", "id": 1},
+      {"geometry": "POINT (5 -5)", "id": 2},
+      {"geometry": "POINT (5 5)", "id": 3}
+    ]
+  },
+  "note": "Two edges that cross are within tolerance of each other for a short way around the crossing. That stretch is shorter than min_length (by default twice the tolerance), so it is not reported.",
+  "operation": "match_edges",
+  "parameters": {
+    "tolerance": 0.5
+  },
+  "title": "Edges that only cross"
+}

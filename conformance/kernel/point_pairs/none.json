@@ -1,0 +1,13 @@
+{
+  "expected": {
+    "a": [],
+    "b": []
+  },
+  "function": "point_pairs",
+  "input": {
+    "tolerance": 1,
+    "xy": [[0, 0], [3, 0]]
+  },
+  "note": "Empty arrays out.",
+  "title": "No pairs"
+}

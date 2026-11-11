@@ -1,0 +1,23 @@
+{
+  "expected": {
+    "matches": [
+      {"distance": 1.0, "edge": 0, "measure": 3.0, "node": 2, "x": 2.0, "y": 1.0}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 0, 2 2)", "id": 0, "to_id": 1}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (2 2)", "id": 1},
+      {"geometry": "POINT (3 1)", "id": 2}
+    ]
+  },
+  "note": "The measure is the distance along the line from its start, round the corner: 2 along the first segment and 1 up the second.",
+  "operation": "match_nodes_to_edges",
+  "parameters": {
+    "tolerance": 1
+  },
+  "title": "Measure along an edge with a corner"
+}

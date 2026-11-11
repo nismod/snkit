@@ -1,0 +1,42 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 5, "geometry": "LINESTRING (0 0, 1 0)", "id": 3, "to_id": 6},
+      {"from_id": 7, "geometry": "LINESTRING (0 1, 1 1)", "id": 4, "to_id": 8}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 5},
+      {"geometry": "POINT (1 0)", "id": 6},
+      {"geometry": "POINT (0 1)", "id": 7},
+      {"geometry": "POINT (1 1)", "id": 8}
+    ]
+  },
+  "input": {
+    "networks": {
+      "a": {
+        "edges": [
+          {"from_id": 5, "geometry": "LINESTRING (0 0, 1 0)", "id": 3, "to_id": 6}
+        ],
+        "nodes": [
+          {"geometry": "POINT (0 0)", "id": 5},
+          {"geometry": "POINT (1 0)", "id": 6}
+        ]
+      },
+      "b": {
+        "edges": [
+          {"from_id": 0, "geometry": "LINESTRING (0 1, 1 1)", "id": 0, "to_id": 1}
+        ],
+        "nodes": [
+          {"geometry": "POINT (0 1)", "id": 0},
+          {"geometry": "POINT (1 1)", "id": 1}
+        ]
+      }
+    }
+  },
+  "note": "With column=null no column is added. Ids follow on from the highest id before, not from the count.",
+  "operation": "combine",
+  "parameters": {
+    "column": null
+  },
+  "title": "No source column"
+}

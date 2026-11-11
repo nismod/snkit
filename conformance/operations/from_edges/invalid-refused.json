@@ -1,0 +1,15 @@
+{
+  "expected": {
+    "error": true
+  },
+  "input": {
+    "lines": [
+      {"geometry": "LINESTRING (0 0, 1 0)"},
+      {"geometry": "LINESTRING (1 1, 1 1)"}
+    ]
+  },
+  "note": "By default a geometry that cannot be an edge is an error.",
+  "operation": "from_edges",
+  "parameters": {},
+  "title": "Unusable geometries, refused"
+}

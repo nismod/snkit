@@ -1,0 +1,22 @@
+{
+  "expected": {
+    "coords": [[0.0, 0.0], [1.0, 1.0], [1.0, 1.0], [2.0, 0.0]],
+    "dst": [2, 1],
+    "offsets": [0, 2, 4],
+    "parent": [0, 0],
+    "src": [0, 2]
+  },
+  "function": "split",
+  "input": {
+    "coords": [[0, 0], [1, 1], [2, 0]],
+    "cut_edge": [0],
+    "cut_node": [2],
+    "cut_seg": [1],
+    "cut_xy": [[1, 1]],
+    "dst": [1],
+    "offsets": [0, 3],
+    "src": [0]
+  },
+  "note": "A cut at a coordinate that is already a vertex of the edge does not repeat it.",
+  "title": "A cut on an existing vertex"
+}

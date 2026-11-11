@@ -1,0 +1,36 @@
+{
+  "expected": {
+    "edges": [
+      {"component": 0, "from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "to_id": 1},
+      {"component": 0, "from_id": 1, "geometry": "LINESTRING (1 0, 2 0)", "id": 1, "to_id": 2},
+      {"component": 1, "from_id": 3, "geometry": "LINESTRING (0 2, 1 2)", "id": 2, "to_id": 4}
+    ],
+    "nodes": [
+      {"component": 0, "geometry": "POINT (0 0)", "id": 0},
+      {"component": 0, "geometry": "POINT (1 0)", "id": 1},
+      {"component": 0, "geometry": "POINT (2 0)", "id": 2},
+      {"component": 1, "geometry": "POINT (0 2)", "id": 3},
+      {"component": 1, "geometry": "POINT (1 2)", "id": 4},
+      {"component": 2, "geometry": "POINT (2 2)", "id": 5}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "to_id": 1},
+      {"from_id": 1, "geometry": "LINESTRING (1 0, 2 0)", "id": 1, "to_id": 2},
+      {"from_id": 3, "geometry": "LINESTRING (0 2, 1 2)", "id": 2, "to_id": 4}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (1 0)", "id": 1},
+      {"geometry": "POINT (2 0)", "id": 2},
+      {"geometry": "POINT (0 2)", "id": 3},
+      {"geometry": "POINT (1 2)", "id": 4},
+      {"geometry": "POINT (2 2)", "id": 5}
+    ]
+  },
+  "note": "Nodes and edges get a component column. Parts are numbered from 0 in order of their first node.",
+  "operation": "label_components",
+  "parameters": {},
+  "title": "Two connected parts and an isolated node"
+}

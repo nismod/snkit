@@ -1,0 +1,43 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "to_id": 1}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (1 0)", "id": 1}
+    ]
+  },
+  "input": {
+    "networks": {
+      "a": {
+        "edges": [
+          {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "to_id": 1},
+          {"from_id": 1, "geometry": "LINESTRING (1 0, 2 0)", "id": 1, "to_id": 2}
+        ],
+        "nodes": [
+          {"geometry": "POINT (0 0)", "id": 0},
+          {"geometry": "POINT (1 0)", "id": 1},
+          {"geometry": "POINT (2 0)", "id": 2}
+        ]
+      },
+      "b": {
+        "edges": [
+          {"from_id": 0, "geometry": "LINESTRING (1 0.25, 2 0.25)", "id": 0, "to_id": 1},
+          {"from_id": 1, "geometry": "LINESTRING (2 0.25, 3 0.25)", "id": 1, "to_id": 2}
+        ],
+        "nodes": [
+          {"geometry": "POINT (1 0.25)", "id": 0},
+          {"geometry": "POINT (2 0.25)", "id": 1},
+          {"geometry": "POINT (3 0.25)", "id": 2}
+        ]
+      }
+    }
+  },
+  "note": "With a tolerance, a's second edge matches b's first and is removed.",
+  "operation": "difference",
+  "parameters": {
+    "tolerance": 0.5
+  },
+  "title": "Nearly the same edge"
+}

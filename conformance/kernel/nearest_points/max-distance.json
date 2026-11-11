@@ -1,0 +1,13 @@
+{
+  "expected": {
+    "nearest": [0, -1]
+  },
+  "function": "nearest_points",
+  "input": {
+    "max_distance": 1,
+    "targets": [[1, 0], [9, 0]],
+    "xy": [[0, 0], [5, 0]]
+  },
+  "note": "A point with no target within max_distance gets -1. A target exactly at max_distance counts.",
+  "title": "Within a distance"
+}

@@ -1,0 +1,19 @@
+{
+  "expected": {
+    "distance": [1.0],
+    "frac": [0.0],
+    "line": [0],
+    "point": [0],
+    "vertex": [1],
+    "xy": [[2.0, 0.0]]
+  },
+  "function": "points_near_lines",
+  "input": {
+    "coords": [[0, 0], [2, 0]],
+    "offsets": [0, 2],
+    "tolerance": 1,
+    "xy": [[3, 0]]
+  },
+  "note": "The nearest place is the end of the line itself. It is given as the last vertex of the line with fraction 0, although no segment starts there.",
+  "title": "A point beyond the end of a line"
+}

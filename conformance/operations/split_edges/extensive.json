@@ -1,0 +1,31 @@
+{
+  "expected": {
+    "edges": [
+      {"cost": 2.0, "from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 1, "name": "A1", "to_id": 2},
+      {"cost": 6.0, "from_id": 2, "geometry": "LINESTRING (1 0, 4 0)", "id": 2, "name": "A1", "to_id": 1}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (4 0)", "id": 1},
+      {"geometry": "POINT (1 0)", "id": 2}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"cost": 8, "from_id": 0, "geometry": "LINESTRING (0 0, 4 0)", "id": 0, "name": "A1", "to_id": 1}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (4 0)", "id": 1}
+    ]
+  },
+  "note": "Pieces copy the attributes of the edge. A column named in extensive is shared out in proportion to length.",
+  "operation": "split_edges",
+  "parameters": {
+    "extensive": ["cost"],
+    "locations": [
+      {"edge": 0, "measure": 1}
+    ]
+  },
+  "title": "Attributes of the pieces"
+}

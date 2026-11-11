@@ -1,0 +1,13 @@
+{
+  "expected": {
+    "edges": [],
+    "nodes": []
+  },
+  "input": {
+    "lines": []
+  },
+  "note": "No lines give an empty network.",
+  "operation": "from_edges",
+  "parameters": {},
+  "title": "No lines"
+}

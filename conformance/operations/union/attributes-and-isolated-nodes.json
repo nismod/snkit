@@ -1,0 +1,42 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "name": "a's", "to_id": 1}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (1 0)", "id": 1},
+      {"geometry": "POINT (5 0)", "id": 2},
+      {"geometry": "POINT (6 0)", "id": 3}
+    ]
+  },
+  "input": {
+    "networks": {
+      "a": {
+        "edges": [
+          {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "name": "a's", "to_id": 1}
+        ],
+        "nodes": [
+          {"geometry": "POINT (0 0)", "id": 0},
+          {"geometry": "POINT (1 0)", "id": 1},
+          {"geometry": "POINT (5 0)", "id": 2},
+          {"geometry": "POINT (6 0)", "id": 3}
+        ]
+      },
+      "b": {
+        "edges": [
+          {"from_id": 0, "geometry": "LINESTRING (1 0, 0 0)", "id": 0, "name": "b's", "to_id": 1}
+        ],
+        "nodes": [
+          {"geometry": "POINT (1 0)", "id": 0},
+          {"geometry": "POINT (0 0)", "id": 1},
+          {"geometry": "POINT (5 0)", "id": 2}
+        ]
+      }
+    }
+  },
+  "note": "A shared edge keeps a's attributes and direction. An isolated node in both is kept once.",
+  "operation": "union",
+  "parameters": {},
+  "title": "Attributes and isolated nodes"
+}

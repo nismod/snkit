@@ -1,0 +1,13 @@
+{
+  "expected": {
+    "labels": [0, 1, 2]
+  },
+  "function": "components",
+  "input": {
+    "a": [],
+    "b": [],
+    "n": 3
+  },
+  "note": "Every item is its own group.",
+  "title": "No links"
+}

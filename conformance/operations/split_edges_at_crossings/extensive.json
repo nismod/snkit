@@ -1,0 +1,35 @@
+{
+  "expected": {
+    "edges": [
+      {"cost": 2.0, "from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 2, "name": "A1", "to_id": 4},
+      {"cost": 6.0, "from_id": 4, "geometry": "LINESTRING (1 0, 4 0)", "id": 3, "name": "A1", "to_id": 1},
+      {"cost": 1.5, "from_id": 2, "geometry": "LINESTRING (1 -1, 1 0)", "id": 4, "name": "B2", "to_id": 4},
+      {"cost": 1.5, "from_id": 4, "geometry": "LINESTRING (1 0, 1 1)", "id": 5, "name": "B2", "to_id": 3}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (4 0)", "id": 1},
+      {"geometry": "POINT (1 -1)", "id": 2},
+      {"geometry": "POINT (1 1)", "id": 3},
+      {"geometry": "POINT (1 0)", "id": 4}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"cost": 8, "from_id": 0, "geometry": "LINESTRING (0 0, 4 0)", "id": 0, "name": "A1", "to_id": 1},
+      {"cost": 3, "from_id": 2, "geometry": "LINESTRING (1 -1, 1 1)", "id": 1, "name": "B2", "to_id": 3}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (4 0)", "id": 1},
+      {"geometry": "POINT (1 -1)", "id": 2},
+      {"geometry": "POINT (1 1)", "id": 3}
+    ]
+  },
+  "note": "Pieces copy the attributes of their edge. A column named in extensive is shared out in proportion to length.",
+  "operation": "split_edges_at_crossings",
+  "parameters": {
+    "extensive": ["cost"]
+  },
+  "title": "Attributes of the pieces"
+}

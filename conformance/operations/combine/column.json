@@ -1,0 +1,42 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "gauge": null, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "lanes": 2.0, "network": "a", "to_id": 1},
+      {"from_id": 2, "gauge": "narrow", "geometry": "LINESTRING (0 1, 1 1)", "id": 1, "lanes": null, "network": "b", "to_id": 3}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0, "network": "a"},
+      {"geometry": "POINT (1 0)", "id": 1, "network": "a"},
+      {"geometry": "POINT (0 1)", "id": 2, "network": "b"},
+      {"geometry": "POINT (1 1)", "id": 3, "network": "b"}
+    ]
+  },
+  "input": {
+    "networks": {
+      "a": {
+        "edges": [
+          {"from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "lanes": 2, "to_id": 1}
+        ],
+        "nodes": [
+          {"geometry": "POINT (0 0)", "id": 0},
+          {"geometry": "POINT (1 0)", "id": 1}
+        ]
+      },
+      "b": {
+        "edges": [
+          {"from_id": 0, "gauge": "narrow", "geometry": "LINESTRING (0 1, 1 1)", "id": 0, "to_id": 1}
+        ],
+        "nodes": [
+          {"geometry": "POINT (0 1)", "id": 0},
+          {"geometry": "POINT (1 1)", "id": 1}
+        ]
+      }
+    }
+  },
+  "note": "column names the column added. An attribute that only one network has is null for the other.",
+  "operation": "combine",
+  "parameters": {
+    "column": "network"
+  },
+  "title": "Naming the source column, and attributes"
+}

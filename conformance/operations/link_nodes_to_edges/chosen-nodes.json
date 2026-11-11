@@ -1,0 +1,35 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 2 0)", "id": 2, "to_id": 4},
+      {"from_id": 4, "geometry": "LINESTRING (2 0, 4 0)", "id": 3, "to_id": 1},
+      {"from_id": 2, "geometry": "LINESTRING (2 2, 2 1)", "id": 1, "to_id": 3},
+      {"from_id": 3, "geometry": "LINESTRING (2 1, 2 0)", "id": 4, "to_id": 4}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (4 0)", "id": 1},
+      {"geometry": "POINT (2 2)", "id": 2},
+      {"geometry": "POINT (2 1)", "id": 3},
+      {"geometry": "POINT (2 0)", "id": 4}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 0, "geometry": "LINESTRING (0 0, 4 0)", "id": 0, "to_id": 1},
+      {"from_id": 2, "geometry": "LINESTRING (2 2, 2 1)", "id": 1, "to_id": 3}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (4 0)", "id": 1},
+      {"geometry": "POINT (2 2)", "id": 2},
+      {"geometry": "POINT (2 1)", "id": 3}
+    ]
+  },
+  "note": "By default only nodes with no edges are linked. Here the nodes mask chooses node 3, the loose end of edge 1. It is linked to the nearest edge that it is not already an end of.",
+  "operation": "link_nodes_to_edges",
+  "parameters": {
+    "nodes": [false, false, false, true]
+  },
+  "title": "Choosing which nodes to link"
+}

@@ -1,0 +1,17 @@
+{
+  "expected": {
+    "frac_a": [1.0],
+    "frac_b": [0.0],
+    "seg_a": [0],
+    "seg_b": [2],
+    "xy": [[1.0, 0.0]]
+  },
+  "function": "segment_crossings",
+  "input": {
+    "coords": [[0, 0], [1, 0], [1, 0], [2, 1]],
+    "end_to_end": true,
+    "offsets": [0, 2, 4]
+  },
+  "note": "With end_to_end set, the place where the two lines meet at an end of each is reported.",
+  "title": "Lines that meet end to end, asked for"
+}

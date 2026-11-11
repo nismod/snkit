@@ -1,0 +1,32 @@
+{
+  "expected": {
+    "edges": [
+      {"cost": 5, "from_id": 0, "geometry": "LINESTRING (0 0, 1 0, 2 0)", "id": 2, "name": "A1", "speed": 50, "to_id": 2}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (2 0)", "id": 2}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"cost": 2, "from_id": 0, "geometry": "LINESTRING (0 0, 1 0)", "id": 0, "name": "A1", "speed": 30, "to_id": 1},
+      {"cost": 3, "from_id": 1, "geometry": "LINESTRING (1 0, 2 0)", "id": 1, "name": "B2", "speed": 50, "to_id": 2}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 0},
+      {"geometry": "POINT (1 0)", "id": 1},
+      {"geometry": "POINT (2 0)", "id": 2}
+    ]
+  },
+  "note": "agg gives a rule for each column: here the first name, the sum of cost and the largest speed.",
+  "operation": "merge_edges",
+  "parameters": {
+    "agg": {
+      "cost": "sum",
+      "name": "first",
+      "speed": "max"
+    }
+  },
+  "title": "Attributes of a merged edge, with rules"
+}

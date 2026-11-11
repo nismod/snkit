@@ -1,0 +1,24 @@
+{
+  "expected": {
+    "edges": [
+      {"from_id": 2, "geometry": "LINESTRING (1 0, 0 0)", "id": 0, "to_id": 5}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 5},
+      {"geometry": "POINT (1 0)", "id": 2}
+    ]
+  },
+  "input": {
+    "edges": [
+      {"from_id": 2, "geometry": "LINESTRING (1 0, 0 0)", "to_id": 5}
+    ],
+    "nodes": [
+      {"geometry": "POINT (0 0)", "id": 5},
+      {"geometry": "POINT (1 0)", "id": 2}
+    ]
+  },
+  "note": "Non-negative integer ids are used as they are. Edges have no ids here, so they are numbered from 0.",
+  "operation": "from_topology",
+  "parameters": {},
+  "title": "Tables that refer to each other by integer ids"
+}
