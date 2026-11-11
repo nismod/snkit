@@ -11,7 +11,6 @@ from typing import Any, Callable, Dict, Optional
 
 import numpy as np
 import pandas as pd
-import shapely
 
 from snkit import _kernel as K
 from snkit.core import GEOM, ID, Arrays, Lines, check_distance
@@ -265,60 +264,31 @@ def edge_overlaps(arrays: Arrays, tolerance: float, min_length: float, directed:
 
     Columns: ``a``, ``start_a``, ``end_a``, ``b``, ``start_b``, ``end_b``,
     ``reversed``, ``distance``.
+
+    The kernel finds each stretch of ``a`` that is within tolerance of ``b``,
+    then moves its two ends onto ``b`` and back onto ``a``, so that the two
+    intervals end at places that face each other (see
+    :func:`snkit._kernel.line_overlaps`). Intervals shorter than
+    ``min_length`` on either edge, or with no length, are left out here.
     """
     columns = ["a", "start_a", "end_a", "b", "start_b", "end_b", "reversed", "distance"]
     empty = pd.DataFrame({c: np.zeros(0, dtype=float) for c in columns})
     if arrays.m < 2:
         return empty
-    lines = arrays.lines.to_shapely()
-    tree = shapely.STRtree(lines)
-    i, j = tree.query(lines, predicate="dwithin", distance=tolerance)
-    once = i < j
-    i, j = i[once], j[once]
-    if len(i) == 0:
-        return empty
-    if tolerance > 0:
-        used, inverse = np.unique(j, return_inverse=True)
-        near = shapely.buffer(lines[used], tolerance)[inverse]
-    else:
-        near = lines[j]
-    shared = shapely.line_merge(shapely.intersection(lines[i], near))
-    parts, pair = shapely.get_parts(shared, return_index=True)
-    is_line = (shapely.get_type_id(parts) == 1) & (shapely.length(parts) > 0)
-    parts, pair = parts[is_line], pair[is_line]
-    if len(parts) == 0:
-        return empty
-    a, b = i[pair], j[pair]
-    line_a, line_b = lines[a], lines[b]
-    # project the ends of each stretch of a onto b, then back, so that both
-    # intervals end at places that face each other
-    at_b0 = shapely.line_locate_point(line_b, shapely.get_point(parts, 0))
-    at_b1 = shapely.line_locate_point(line_b, shapely.get_point(parts, -1))
-    at_a0 = shapely.line_locate_point(line_a, shapely.line_interpolate_point(line_b, at_b0))
-    at_a1 = shapely.line_locate_point(line_a, shapely.line_interpolate_point(line_b, at_b1))
-    # how far the stretch of a strays from b: measured at its two ends and at
-    # the vertices of a between them
-    low, high = np.minimum(at_a0, at_a1), np.maximum(at_a0, at_a1)
-    distance = np.maximum(
-        shapely.distance(shapely.line_interpolate_point(line_a, low), line_b),
-        shapely.distance(shapely.line_interpolate_point(line_a, high), line_b),
+    a, b, _, _, start_a, end_a, start_b, end_b, backwards, distance = K.line_overlaps(
+        arrays.coords, arrays.offsets, tolerance
     )
-    vertices, part_index = shapely.get_coordinates(parts, return_index=True)
-    vertices = shapely.points(vertices)
-    along = shapely.line_locate_point(line_a[part_index], vertices)
-    inside = (along >= low[part_index]) & (along <= high[part_index])
-    gap = shapely.distance(vertices[inside], line_b[part_index[inside]])
-    np.maximum.at(distance, part_index[inside], gap)
-
+    if len(a) == 0:
+        return empty
     matches = pd.DataFrame(
         {
             "a": a,
-            "start_a": np.minimum(at_a0, at_a1),
-            "end_a": np.maximum(at_a0, at_a1),
+            "start_a": start_a,
+            "end_a": end_a,
             "b": b,
-            "start_b": np.minimum(at_b0, at_b1),
-            "end_b": np.maximum(at_b0, at_b1),
-            "reversed": (at_b0 > at_b1) != (at_a0 > at_a1),
+            "start_b": start_b,
+            "end_b": end_b,
+            "reversed": backwards,
             "distance": distance,
         }
     )

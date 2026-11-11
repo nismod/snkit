@@ -217,6 +217,76 @@ fn extend_ends<'py>(
     Ok((points(py, out)?, out_offsets.into_pyarray(py)))
 }
 
+/// Simplify every line with the Douglas-Peucker algorithm: new coordinates and offsets.
+#[pyfunction]
+fn simplify_lines<'py>(
+    py: Python<'py>,
+    coords: Points<'py>,
+    offsets: Int<'py>,
+    tolerance: f64,
+) -> PyResult<(PointsOut<'py>, IntOut<'py>)> {
+    let (coords, offsets) = (coords.as_slice()?, offsets.as_slice()?);
+    let (out, out_offsets) = py.allow_threads(|| crate::simplify::simplify_lines(coords, offsets, tolerance));
+    Ok((points(py, out)?, out_offsets.into_pyarray(py)))
+}
+
+/// Find the stretches where one line runs within tolerance of another.
+#[pyfunction]
+#[allow(clippy::type_complexity)]
+fn line_overlaps<'py>(
+    py: Python<'py>,
+    coords: Points<'py>,
+    offsets: Int<'py>,
+    tolerance: f64,
+) -> PyResult<(
+    IntOut<'py>,
+    IntOut<'py>,
+    FloatOut<'py>,
+    FloatOut<'py>,
+    FloatOut<'py>,
+    FloatOut<'py>,
+    FloatOut<'py>,
+    FloatOut<'py>,
+    Bound<'py, PyArray1<bool>>,
+    FloatOut<'py>,
+)> {
+    let (coords, offsets) = (coords.as_slice()?, offsets.as_slice()?);
+    let out = py.allow_threads(|| crate::overlaps::line_overlaps(coords, offsets, tolerance));
+    Ok((
+        out.a.into_pyarray(py),
+        out.b.into_pyarray(py),
+        out.near_start.into_pyarray(py),
+        out.near_end.into_pyarray(py),
+        out.start_a.into_pyarray(py),
+        out.end_a.into_pyarray(py),
+        out.start_b.into_pyarray(py),
+        out.end_b.into_pyarray(py),
+        out.reversed.into_pyarray(py),
+        out.distance.into_pyarray(py),
+    ))
+}
+
+/// The discrete Hausdorff distance between pairs of lines, given by position.
+#[pyfunction]
+fn hausdorff_distance<'py>(
+    py: Python<'py>,
+    coords: Points<'py>,
+    offsets: Int<'py>,
+    a: Int<'py>,
+    b: Int<'py>,
+) -> PyResult<FloatOut<'py>> {
+    let (coords, offsets, a, b) = (coords.as_slice()?, offsets.as_slice()?, a.as_slice()?, b.as_slice()?);
+    let lines = offsets.len() as i64 - 1;
+    if a.len() != b.len() || a.iter().chain(b).any(|&l| l < 0 || l >= lines) {
+        return Err(PyValueError::new_err(
+            "a and b must be positions of lines, and as many of one as the other",
+        ));
+    }
+    Ok(py
+        .allow_threads(|| crate::overlaps::hausdorff_distance(coords, offsets, a, b))
+        .into_pyarray(py))
+}
+
 /// For each point, every line within tolerance, with the nearest place on it.
 #[pyfunction]
 fn points_near_lines<'py>(
@@ -389,6 +459,9 @@ fn native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(locate, module)?)?;
     module.add_function(wrap_pyfunction!(sync_ends, module)?)?;
     module.add_function(wrap_pyfunction!(extend_ends, module)?)?;
+    module.add_function(wrap_pyfunction!(simplify_lines, module)?)?;
+    module.add_function(wrap_pyfunction!(line_overlaps, module)?)?;
+    module.add_function(wrap_pyfunction!(hausdorff_distance, module)?)?;
     module.add_function(wrap_pyfunction!(points_near_lines, module)?)?;
     module.add_function(wrap_pyfunction!(nearest_lines, module)?)?;
     module.add_function(wrap_pyfunction!(nearest_points, module)?)?;

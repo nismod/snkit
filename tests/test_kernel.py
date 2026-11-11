@@ -282,3 +282,217 @@ def test_segment_crossings_do_not_depend_on_order_or_direction(seed):
     before = K.segment_crossings(coords, offsets)[4]
     after = K.segment_crossings(shuffled.reshape(-1, 2), offsets)[4]
     assert sorted(map(tuple, before)) == sorted(map(tuple, after))
+
+
+def test_simplify_lines():
+    # a small kink and a large one; two vertices; a small closed ring; a line that goes out and back
+    lines = [
+        [(0, 0), (1, 0.1), (2, 0), (3, 2), (4, 0)],
+        [(9, 9), (9, 8)],
+        [(0, 0), (0.1, 0), (0.1, 0.1), (0, 0)],
+        [(5, 5), (5.2, 5), (5, 5)],
+    ]
+    coords = np.array([p for line in lines for p in line], dtype=float)
+    offsets = np.cumsum([0] + [len(line) for line in lines])
+    simple, simple_offsets = K.simplify_lines(coords, offsets, 0.5)
+    assert simple_offsets.tolist() == [0, 4, 6, 10, 13]
+    assert simple[:4].tolist() == [[0, 0], [2, 0], [3, 2], [4, 0]]
+    # the ring and the line out and back would be left with no length, so are unchanged
+    assert simple[6:].tolist() == coords[7:].tolist()
+    # a larger ring keeps its shape
+    square = np.array([(0, 0), (4, 0), (4, 4), (0, 4), (0, 0)], dtype=float)
+    assert K.simplify_lines(square, [0, 5], 3)[0].tolist() == [[0, 0], [4, 4], [0, 0]]
+    assert K.simplify_lines(np.empty((0, 2)), [0], 1)[1].tolist() == [0]
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("whole", [False, True])
+@pytest.mark.parametrize("tolerance", [0, 0.5, 3, 10, 40])
+def test_simplify_lines_against_shapely(seed, whole, tolerance):
+    coords, offsets = random_lines(seed, vertices=12, whole=whole)
+    # make some lines closed, and give some a stretch of vertices in a straight line
+    lines = coords.reshape(-1, 12, 2)
+    lines[::7, -1] = lines[::7, 0]
+    lines[3::7, 4:8] = np.linspace(lines[3::7, 4], lines[3::7, 7], 4, axis=1)
+    original = as_shapely(coords, offsets)
+    expected = shapely.simplify(original, tolerance, preserve_topology=False)
+    no_length = (shapely.length(expected) == 0) | (shapely.get_num_points(expected) < 2)
+    expected = np.where(no_length, original, expected)
+    simple, simple_offsets = K.simplify_lines(coords, offsets, tolerance)
+    assert np.diff(simple_offsets).tolist() == shapely.get_num_points(expected).tolist()
+    assert simple.tolist() == shapely.get_coordinates(expected).tolist()
+    if tolerance >= 3:
+        assert len(simple) < len(coords)
+    if tolerance == 40:
+        assert no_length.any()
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("whole", [False, True])
+def test_hausdorff_distance_against_shapely(seed, whole):
+    coords, offsets = random_lines(seed, whole=whole)
+    lines = as_shapely(coords, offsets)
+    rng = np.random.default_rng(seed)
+    a, b = rng.integers(0, len(lines), 600), rng.integers(0, len(lines), 600)
+    a[:20] = b[:20]  # some lines with themselves
+    found = K.hausdorff_distance(coords, offsets, a, b)
+    np.testing.assert_allclose(found, shapely.hausdorff_distance(lines[a], lines[b]), rtol=1e-12, atol=1e-12)
+    assert (found[:20] == 0).all()
+
+
+def test_hausdorff_distance_of_lines_of_different_lengths():
+    # lines of one, two and three vertices
+    coords = np.array([(4, 3), (0, 0), (4, 0), (0, 1), (2, 3), (4, 1)], dtype=float)
+    offsets = [0, 1, 3, 6]
+    assert K.hausdorff_distance(coords, offsets, [0, 1, 1, 2], [1, 0, 2, 2]).tolist() == [5, 5, 3, 0]
+    with pytest.raises(ValueError):
+        K.hausdorff_distance(coords, offsets, [0], [3])
+
+
+def test_line_overlaps():
+    # b starts 4 along a and 0.1 to one side, and carries on past its end; c crosses both
+    coords = np.array([(0, 0), (10, 0), (4, 0.1), (14, 0.1), (7, -5), (7, 5)], dtype=float)
+    a, b, near_start, near_end, start_a, end_a, start_b, end_b, backwards, distance = K.line_overlaps(
+        coords, [0, 2, 4, 6], 0.5
+    )
+    assert (a.tolist(), b.tolist()) == ([0, 0, 1], [1, 2, 2])
+    # a is within reach of the start of b a little before it is level with it
+    np.testing.assert_allclose(near_start, [4 - np.sqrt(0.24), 6.5, 2.5])
+    np.testing.assert_allclose(near_end, [10, 7.5, 3.5])
+    np.testing.assert_allclose(start_a, [4, 7, 3])
+    np.testing.assert_allclose(end_a, [10, 7, 3])
+    np.testing.assert_allclose(start_b, [0, 5, 5.1])
+    np.testing.assert_allclose(end_b, [6, 5, 5.1])
+    assert backwards.tolist() == [False, False, False]
+    np.testing.assert_allclose(distance, [0.1, 0, 0], atol=1e-15)
+    # lines that lie exactly on each other, one running the other way
+    coords = np.array([(0, 0), (2, 0), (3, 0), (5, 0), (3, 0), (1, 0)], dtype=float)
+    found = K.line_overlaps(coords, [0, 3, 6], 0)
+    assert [column.tolist() for column in found] == [[0], [1], [1], [3], [1], [3], [2], [4], [True], [0]]
+    assert len(K.line_overlaps(np.empty((0, 2)), [0], 1)[0]) == 0
+
+
+def sampled(line, length, places, count=300):
+    """Places along a line, as distances and as points: evenly spaced, and just either side of given places"""
+    step = 1e-7
+    along = np.concatenate([np.linspace(0, length, count), places - step, places + step])
+    along = along[(along >= 0) & (along <= length)]
+    return along, shapely.line_interpolate_point(line, along)
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("whole, tolerance", [(False, 0.7), (False, 3), (True, 1), (True, 2.5)])
+def test_line_overlaps_against_dense_sampling(seed, whole, tolerance):
+    coords, offsets = random_lines(seed, count=40, whole=whole)
+    lines = as_shapely(coords, offsets)
+    length = shapely.length(lines)
+    a, b, near_start, near_end = K.line_overlaps(coords, offsets, tolerance)[:4]
+    assert (a < b).all() and (near_start < near_end).all() and len(a) > 10
+    assert sorted(zip(a.tolist(), b.tolist(), near_start.tolist())) == list(zip(a, b, near_start))
+    slack = 1e-9
+    for i in range(len(lines)):
+        mine = a == i
+        along, points = sampled(lines[i], length[i], np.concatenate([near_start[mine], near_end[mine]]))
+        for j in range(i + 1, len(lines)):
+            pair = mine & (b == j)
+            # stretches of one pair neither touch nor overlap
+            assert (near_start[pair][1:] > near_end[pair][:-1]).all()
+            # (allowing for the last few bits of a distance along a line)
+            inside = ((along[:, None] >= near_start[pair] - slack) & (along[:, None] <= near_end[pair] + slack)).any(
+                axis=1
+            )
+            distance = shapely.distance(points, lines[j])
+            # everywhere on a stretch is within tolerance, and nowhere else is
+            assert (distance[inside] <= tolerance + slack).all()
+            assert (distance[~inside] >= tolerance - slack).all()
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_line_overlaps_where_lines_lie_exactly_on_each_other(seed):
+    coords, offsets = random_lines(seed, count=300, whole=True)
+    lines = as_shapely(coords, offsets)
+    a, b, near_start, near_end = K.line_overlaps(coords, offsets, 0)[:4]
+    assert len(a) > 0 and (a < b).all() and (near_start < near_end).all()
+    # each stretch lies on the other line
+    for at in (near_start, near_end, (near_start + near_end) / 2):
+        assert (shapely.distance(shapely.line_interpolate_point(lines[a], at), lines[b]) < 1e-9).all()
+    # and together the stretches of a pair are as long as what the two lines share
+    i, j = np.triu_indices(len(lines), 1)
+    touching = shapely.intersects(lines[i], lines[j])
+    i, j = i[touching], j[touching]
+    expected = shapely.length(shapely.intersection(lines[i], lines[j]))
+    shared = np.zeros((len(lines), len(lines)))
+    np.add.at(shared, (a, b), near_end - near_start)
+    # (a line that doubles back on itself is counted once by Shapely and twice here)
+    simple = shapely.is_simple(lines[i])
+    np.testing.assert_allclose(shared[i, j][simple], expected[simple], atol=1e-9)
+    assert (shared[i, j] >= expected - 1e-9).all() and shared.sum() == pytest.approx(shared[i, j].sum())
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("whole, tolerance", [(False, 0.7), (False, 3), (True, 1), (True, 0)])
+def test_line_overlaps_facing_intervals_against_shapely(seed, whole, tolerance):
+    coords, offsets = random_lines(seed, count=150, whole=whole)
+    lines = as_shapely(coords, offsets)
+    measure = K.line_measures(coords, offsets)[1].reshape(len(lines), -1)
+    a, b, near_start, near_end, start_a, end_a, start_b, end_b, backwards, distance = K.line_overlaps(
+        coords, offsets, tolerance
+    )
+    # where a line comes equally near at two places Shapely may choose the other one: pass over lines
+    # that cross themselves, which is where that happens
+    simple = shapely.is_simple(lines)
+    keep = simple[a] & simple[b]
+    if tolerance == 0 and keep.sum() == 0:
+        return  # no two of these lines happen to lie exactly on each other
+    assert keep.sum() > (10 if tolerance else 0)
+    line_a, line_b = lines[a], lines[b]
+
+    def moved(line, other, places):
+        """Places along a line, moved to the nearest places along another"""
+        return shapely.line_locate_point(other, shapely.line_interpolate_point(line, places))
+
+    # each end of the stretch of a, moved to the nearest place on b, and from there to the nearest on a
+    at_b = [moved(line_a, line_b, at) for at in (near_start, near_end)]
+    at_a = [moved(line_b, line_a, at) for at in at_b]
+    close = dict(rtol=0, atol=1e-7)
+
+    def place(line, at):
+        return shapely.line_interpolate_point(line, at)
+
+    def is_nearest(source, line, found):
+        """Whether one of the places found on a line is as near to each source point as any place on it"""
+        best = shapely.distance(source, line)
+        return np.minimum(*(shapely.distance(source, place(line, at)) for at in found)) <= best + 1e-9
+
+    # the places the kernel gives are nearest places, whichever it chose where two are equally near
+    for at in (near_start, near_end):
+        assert is_nearest(place(line_a, at), line_b, (start_b, end_b)).all()
+    for at in (start_b, end_b):
+        assert is_nearest(place(line_b, at), line_a, (start_a, end_a)).all()
+    # and where Shapely made the same choices (always, unless two places are equally near), everything agrees
+    agree = np.ones(len(a), dtype=bool)
+    for found, expected in (
+        (start_b, np.minimum(*at_b)),
+        (end_b, np.maximum(*at_b)),
+        (start_a, np.minimum(*at_a)),
+        (end_a, np.maximum(*at_a)),
+    ):
+        agree &= np.abs(found - expected) <= 1e-7
+    assert agree[keep].mean() > 0.9
+    if not whole:  # with coordinates that are not whole numbers, nothing is ever exactly as near
+        assert agree[keep].all()
+    keep &= agree
+    opposite = (at_b[0] > at_b[1]) != (at_a[0] > at_a[1])
+    settled = keep & (np.abs(at_b[0] - at_b[1]) > 1e-6) & (np.abs(at_a[0] - at_a[1]) > 1e-6)
+    assert backwards[settled].tolist() == opposite[settled].tolist()
+    # how far a strays from b: at the ends of its interval, and at the ends of the stretch and
+    # the vertices of a within it where they are in the interval
+    expected = np.zeros(len(a))
+    for at in (start_a, end_a):
+        expected = np.maximum(expected, shapely.distance(shapely.line_interpolate_point(line_a, at), line_b))
+    for at in [near_start, near_end] + list(measure[a].T):
+        within = (at >= start_a) & (at <= end_a) & (at >= near_start) & (at <= near_end)
+        gap = shapely.distance(shapely.line_interpolate_point(line_a, at), line_b)
+        expected = np.maximum(expected, np.where(within, gap, 0))
+    np.testing.assert_allclose(distance[keep], expected[keep], **close)
+    assert (distance <= tolerance + 1e-9).all()
