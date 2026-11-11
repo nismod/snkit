@@ -17,20 +17,38 @@ pub struct Places {
     pub distance: Vec<f64>,
 }
 
-type Point = [f64; 2];
+pub(crate) type Point = [f64; 2];
 type Place = (u32, u32, f64, Point, f64);
 
-/// The segments of a set of lines, with an index over them.
-struct Segments<'a> {
-    coords: &'a [f64],
+/// The segments of a set of lines, with an index over them. Segments of zero
+/// length are left out.
+pub(crate) struct Segments<'a> {
+    pub coords: &'a [f64],
     /// For each segment: the vertex it starts at, and the line it is part of.
-    start: Vec<u32>,
-    line: Vec<u32>,
-    tree: PackedRTree,
+    pub start: Vec<u32>,
+    pub line: Vec<u32>,
+    pub tree: PackedRTree,
+}
+
+/// The nearest place to a point on the segment from `a` to `b`: fraction along, coordinate, distance.
+/// At an end of the segment the fraction is exactly 0 or 1 and the coordinate the end's own.
+/// A segment of no length is taken at its start.
+pub(crate) fn nearest_on_segment(p: Point, a: Point, b: Point) -> (f64, Point, f64) {
+    let d = [b[0] - a[0], b[1] - a[1]];
+    let t = ((p[0] - a[0]) * d[0] + (p[1] - a[1]) * d[1]) / (d[0] * d[0] + d[1] * d[1]);
+    let (t, xy) = if t >= 1.0 {
+        (1.0, b)
+    } else if t > 0.0 {
+        (t, [a[0] + t * d[0], a[1] + t * d[1]])
+    } else {
+        // also where the segment has no length, and the fraction is not a number
+        (0.0, a)
+    };
+    (t, xy, (xy[0] - p[0]).hypot(xy[1] - p[1]))
 }
 
 impl<'a> Segments<'a> {
-    fn new(coords: &'a [f64], offsets: &[i64]) -> Self {
+    pub fn new(coords: &'a [f64], offsets: &[i64]) -> Self {
         assert!(
             coords.len() / 2 <= u32::MAX as usize,
             "more than 2^32 vertices: divide the network first"
@@ -59,22 +77,18 @@ impl<'a> Segments<'a> {
 
     /// The nearest place on a segment to a point: fraction along, coordinate, distance.
     /// At an end of the segment the fraction is exactly 0 or 1 and the coordinate the end's own.
-    fn nearest_place(&self, segment: u32, p: Point) -> (f64, Point, f64) {
+    pub fn nearest_place(&self, segment: u32, p: Point) -> (f64, Point, f64) {
+        let (a, b) = self.ends(segment);
+        nearest_on_segment(p, a, b)
+    }
+
+    /// The two ends of a segment.
+    pub fn ends(&self, segment: u32) -> (Point, Point) {
         let v = self.start[segment as usize] as usize;
-        let (a, b) = (
+        (
             [self.coords[2 * v], self.coords[2 * v + 1]],
             [self.coords[2 * v + 2], self.coords[2 * v + 3]],
-        );
-        let d = [b[0] - a[0], b[1] - a[1]];
-        let t = ((p[0] - a[0]) * d[0] + (p[1] - a[1]) * d[1]) / (d[0] * d[0] + d[1] * d[1]);
-        let (t, xy) = if t <= 0.0 {
-            (0.0, a)
-        } else if t >= 1.0 {
-            (1.0, b)
-        } else {
-            (t, [a[0] + t * d[0], a[1] + t * d[1]])
-        };
-        (t, xy, (xy[0] - p[0]).hypot(xy[1] - p[1]))
+        )
     }
 
     /// Name a place by vertex and fraction, the end of a segment being the start of the next.

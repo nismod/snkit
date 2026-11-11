@@ -28,6 +28,9 @@ FloatArray = npt.NDArray[np.float64]
 IntArray = npt.NDArray[np.int64]
 BoolArray = npt.NDArray[np.bool_]
 Places = Tuple[IntArray, IntArray, IntArray, FloatArray, FloatArray, FloatArray]
+Overlaps = Tuple[
+    IntArray, IntArray, FloatArray, FloatArray, FloatArray, FloatArray, FloatArray, FloatArray, BoolArray, FloatArray
+]
 
 
 def _ints(array: Any) -> IntArray:
@@ -194,3 +197,52 @@ def nearest_points(xy: Any, targets: Any, max_distance: Optional[float] = None) 
     return _native.nearest_points(  # type: ignore[no-any-return]
         _points(xy), _points(targets), np.inf if max_distance is None else float(max_distance)
     )
+
+
+def simplify_lines(coords: Any, offsets: Any, tolerance: float) -> Tuple[FloatArray, IntArray]:
+    """Simplify every line with the Douglas-Peucker algorithm.
+
+    Returns new ``coords`` and ``offsets``. The ends of a line are kept, and
+    so is any vertex further than ``tolerance`` from the line through the
+    kept vertices either side of it: the vertices that
+    ``shapely.simplify(lines, tolerance, preserve_topology=False)`` keeps.
+
+    A line that would be left with no length (one that ends where it starts
+    and never goes further than ``tolerance`` from there) is unchanged.
+    """
+    return _native.simplify_lines(_points(coords), _ints(offsets), float(tolerance))  # type: ignore[no-any-return]
+
+
+def line_overlaps(coords: Any, offsets: Any, tolerance: float) -> Overlaps:
+    """Find the stretches where one line runs within ``tolerance`` of another.
+
+    For each pair of lines the stretches are of the earlier line, ``a``. They
+    are exact: a stretch starts and ends where ``a`` is ``tolerance`` from
+    ``b``, or at an end of ``a``. With a tolerance of 0 they are where the two
+    lines lie exactly on top of each other.
+
+    Returns ten arrays with a value for each stretch, sorted by the first
+    three: ``a`` and ``b``, the positions of the lines; ``near_start`` and
+    ``near_end``, the stretch as distances along ``a``; ``start_a``,
+    ``end_a``, ``start_b`` and ``end_b``, the intervals of ``a`` and ``b``
+    that face each other, found by moving each end of the stretch to the
+    nearest place on ``b`` and from there to the nearest place on ``a``;
+    ``reversed``, whether the lines run opposite ways there; and ``distance``,
+    the furthest that ``a`` strays from ``b`` between ``start_a`` and
+    ``end_a``, measured at those places, at the vertices of ``a`` between
+    them, and at the ends of the stretch where they lie between them.
+
+    The facing intervals of lines that merely cross have no length: leaving
+    out intervals too short to matter is for the caller.
+    """
+    return _native.line_overlaps(_points(coords), _ints(offsets), float(tolerance))  # type: ignore[no-any-return]
+
+
+def hausdorff_distance(coords: Any, offsets: Any, a: Any, b: Any) -> FloatArray:
+    """The discrete Hausdorff distance between pairs of lines, given by position.
+
+    The larger of: the furthest any vertex of line ``a`` is from line ``b``,
+    and the furthest any vertex of ``b`` is from ``a``, as
+    ``shapely.hausdorff_distance`` gives.
+    """
+    return _native.hausdorff_distance(_points(coords), _ints(offsets), _ints(a), _ints(b))  # type: ignore[no-any-return]

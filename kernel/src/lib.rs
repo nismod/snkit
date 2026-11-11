@@ -18,8 +18,10 @@ pub mod crossings;
 pub mod geoarrow;
 pub mod measures;
 pub mod nearest;
+pub mod overlaps;
 pub mod points;
 pub mod rtree;
+pub mod simplify;
 pub mod split;
 pub mod tiles;
 

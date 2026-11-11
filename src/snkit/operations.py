@@ -14,7 +14,6 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
-import shapely
 
 from snkit import _kernel as K
 from snkit.core import (
@@ -24,6 +23,7 @@ from snkit.core import (
     Agg,
     Arrays,
     Lineage,
+    Lines,
     _distinct,
     _pairs,
     aggregate,
@@ -31,7 +31,6 @@ from snkit.core import (
     check_distance,
     finish,
     from_ragged,
-    to_ragged,
     identity_lineage,
     next_ids,
 )
@@ -42,7 +41,7 @@ from snkit.match import (
     node_edge_pairs,
     node_pairs,
 )
-from snkit.arrays import PointArray, operation, points_of, with_geometry
+from snkit.arrays import LineArray, PointArray, operation, points_of, with_geometry
 from snkit.network import Network
 
 Result = Union[Network, Tuple[Network, Lineage]]
@@ -705,10 +704,10 @@ def split_edges_at_crossings(
     return finish(network, lineages, return_lineage)
 
 
-def _crossing_pairs(network: Network) -> Any:
-    arrays = Arrays(network)
-    events = crossing_events(arrays)
-    return np.unique(events["edge_a"].to_numpy(dtype=np.int64) * arrays.m + events["edge_b"].to_numpy(dtype=np.int64))
+def _crossing_pairs(lines: Lines) -> Any:
+    """Each pair of lines that meet away from a shared end, as one number"""
+    events = crossing_events(lines)
+    return np.unique(events["edge_a"].to_numpy(dtype=np.int64) * lines.m + events["edge_b"].to_numpy(dtype=np.int64))
 
 
 @operation
@@ -730,25 +729,22 @@ def simplify_edges(network: Network, tolerance: float, return_lineage: bool = Fa
     """
     check_distance(network, tolerance)
     arrays = Arrays(network)
-    original = arrays.lines.to_shapely()
-    simple = shapely.simplify(original, tolerance, preserve_topology=False)
-    degenerate = (shapely.length(simple) == 0) | (shapely.get_num_points(simple) < 2)
-    simple = np.where(degenerate, original, simple)
-    changed = shapely.get_num_points(simple) != shapely.get_num_points(original)
+    original = arrays.lines
+    # a line that would be left with no length comes back unchanged
+    simple = LineArray(*K.simplify_lines(arrays.coords, arrays.offsets, tolerance))
+    changed = np.diff(simple.offsets) != np.diff(original.offsets)
     if changed.any():
-        before = _crossing_pairs(network)
+        before = _crossing_pairs(arrays)
+        either = LineArray._concat_same_type([simple, original])
         while True:
-            candidate = Network(
-                network.nodes, with_geometry(network.edges, from_ragged(*to_ragged(simple)), network.edges.crs)
-            )
-            created = np.setdiff1d(_crossing_pairs(candidate), before)
+            created = np.setdiff1d(_crossing_pairs(Lines(simple)), before)
             involved = np.unique(np.concatenate([created // arrays.m, created % arrays.m]))
             involved = involved[changed[involved]]
             if len(involved) == 0:
                 break
-            simple[involved] = original[involved]
             changed[involved] = False
-    out = Network(network.nodes, with_geometry(network.edges, from_ragged(*to_ragged(simple)), network.edges.crs))
+            simple = either.take(np.arange(arrays.m) + np.where(changed, 0, arrays.m))
+    out = Network(network.nodes, with_geometry(network.edges, simple, network.edges.crs))
     return finish(out, [identity_lineage(network)], return_lineage)
 
 
@@ -917,7 +913,7 @@ def duplicate_pairs(arrays: Arrays, tolerance: float, directed: bool = False) ->
     pairs = table.merge(table, on="key")
     pairs = pairs[pairs["edge_x"] < pairs["edge_y"]]
     a, b = pairs["edge_x"].to_numpy(), pairs["edge_y"].to_numpy()
-    apart = shapely.hausdorff_distance(arrays.lines.take(a).to_shapely(), arrays.lines.take(b).to_shapely())
+    apart = K.hausdorff_distance(arrays.coords, arrays.offsets, a, b)
     same = apart <= tolerance
     return a[same], b[same]
 
